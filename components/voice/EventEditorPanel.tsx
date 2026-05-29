@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { parseVoiceCommand } from '@/lib/voice/parseVoiceCommand';
+import { useSpeechRecognition } from '@/lib/voice/useSpeechRecognition';
 import { formatDateCN, formatTimeCN } from '@/lib/calendar/date-utils';
 import type { CalendarEvent, ParsedCommand } from '@/types';
 
 interface Props {
   event?: CalendarEvent;       // provided → edit mode
   defaultStartAt?: Date;       // pre-fill time when creating from slot click
+  initialText?: string;        // pre-fill quick-input textarea (e.g. from voice)
   onClose: () => void;
   onSaved: (event: CalendarEvent) => void;
   onDeleted?: (id: string) => void;
@@ -32,6 +34,7 @@ function combineDateTime(date: string, time: string): string {
 export function EventEditorPanel({
   event,
   defaultStartAt,
+  initialText,
   onClose,
   onSaved,
   onDeleted,
@@ -40,9 +43,17 @@ export function EventEditorPanel({
   const [tab, setTab] = useState<Tab>(isEdit ? 'manual' : 'quick');
 
   // quick tab state
-  const [nlpInput, setNlpInput] = useState('');
+  const [nlpInput, setNlpInput] = useState(initialText ?? '');
   const [parsed, setParsed] = useState<ParsedCommand | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // 面板内麦克风：识别结果追加进快速输入框，方便补录/修正
+  const { supported: micSupported, listening, start: startMic, stop: stopMic } =
+    useSpeechRecognition({
+      onResult: (text) => {
+        if (text) setNlpInput((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text));
+      },
+    });
 
   // manual tab state
   const defaultDate = defaultStartAt ?? (event ? new Date(event.startAt) : new Date());
@@ -193,14 +204,31 @@ export function EventEditorPanel({
         {/* Quick tab */}
         {tab === 'quick' && (
           <div className="px-5 pt-4">
-            <textarea
-              ref={inputRef}
-              value={nlpInput}
-              onChange={e => setNlpInput(e.target.value)}
-              placeholder={'用自然语言描述事件\n例：明天下午3点开组会\n     下周一上午9点到10点算法课'}
-              rows={3}
-              className="w-full resize-none text-sm text-gray-800 placeholder-gray-400 border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
-            />
+            <div className="relative">
+              <textarea
+                ref={inputRef}
+                value={nlpInput}
+                onChange={e => setNlpInput(e.target.value)}
+                placeholder={'用自然语言描述事件\n例：明天下午3点开组会\n     下周一上午9点到10点算法课'}
+                rows={3}
+                className="w-full resize-none text-sm text-gray-800 placeholder-gray-400 border border-gray-200 rounded-xl px-4 py-3 pr-11 focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
+              />
+              {micSupported && (
+                <button
+                  type="button"
+                  onClick={() => (listening ? stopMic() : startMic())}
+                  className={`absolute bottom-2.5 right-2.5 w-8 h-8 rounded-full flex items-center justify-center text-base transition ${
+                    listening
+                      ? 'bg-blue-500 text-white animate-pulse'
+                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}
+                  aria-label={listening ? '停止语音输入' : '语音输入'}
+                  title={listening ? '停止语音输入' : '语音输入'}
+                >
+                  🎙
+                </button>
+              )}
+            </div>
             {parsed && nlpInput.trim() && (
               <div className="mt-3 rounded-xl bg-gray-50 border border-gray-100 px-4 py-3 space-y-1.5">
                 <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">系统理解</p>

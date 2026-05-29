@@ -8,6 +8,7 @@ import { YearGrid } from '@/components/calendar/YearGrid';
 import { WeekView } from '@/components/calendar/WeekView';
 import { DayView } from '@/components/calendar/DayView';
 import { EventEditorPanel } from '@/components/voice/EventEditorPanel';
+import { VoiceCommandOverlay } from '@/components/voice/VoiceCommandOverlay';
 import { formatMonthYear, formatDayTitle, getWeekStart } from '@/lib/calendar/date-utils';
 import type { CalendarEvent } from '@/types';
 
@@ -24,6 +25,7 @@ interface EditorState {
   open: boolean;
   event?: CalendarEvent;
   defaultStartAt?: Date;
+  initialText?: string;
 }
 
 export default function CalendarPage() {
@@ -33,6 +35,7 @@ export default function CalendarPage() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [editor, setEditor] = useState<EditorState>({ open: false });
+  const [voiceOpen, setVoiceOpen] = useState(false);
   const [use24h, setUse24h] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
     const saved = localStorage.getItem('use24h');
@@ -123,6 +126,12 @@ export default function CalendarPage() {
     setEditor({ open: true, event });
   }
 
+  // 语音/文字指令 → PR1 暂统一走创建，预填进编辑面板由用户确认
+  function handleVoiceSubmit(text: string) {
+    setVoiceOpen(false);
+    setEditor({ open: true, defaultStartAt: selectedDate, initialText: text });
+  }
+
   function handleEditorSaved(saved: CalendarEvent) {
     setEditor({ open: false });
     fetchEvents(viewDate, view);
@@ -206,9 +215,13 @@ export default function CalendarPage() {
             </div>
           </div>
 
-          <div className="border border-dashed border-gray-300 rounded-lg p-3 text-center text-xs text-gray-400">
-            🎙 语音输入（即将上线）
-          </div>
+          <button
+            onClick={() => setVoiceOpen(true)}
+            className="flex items-center justify-center gap-2 border border-gray-200 rounded-lg p-3 text-sm text-gray-600 hover:bg-gray-50 hover:border-blue-300 transition"
+          >
+            <span className="text-base">🎙</span>
+            语音输入
+          </button>
         </div>
       </aside>
 
@@ -293,9 +306,17 @@ export default function CalendarPage() {
         <EventEditorPanel
           event={editor.event}
           defaultStartAt={editor.defaultStartAt}
+          initialText={editor.initialText}
           onClose={() => setEditor({ open: false })}
           onSaved={handleEditorSaved}
           onDeleted={handleEditorDeleted}
+        />
+      )}
+
+      {voiceOpen && (
+        <VoiceCommandOverlay
+          onSubmit={handleVoiceSubmit}
+          onClose={() => setVoiceOpen(false)}
         />
       )}
     </div>
