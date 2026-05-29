@@ -13,12 +13,13 @@ interface WeekViewProps {
   startDate: Date;
   events: CalendarEvent[];
   use24h: boolean;
+  focusTime?: Date | null;   // 指定滚动到的时刻（如刚保存的事件），优先于"最早事件"
   onDayClick: (date: Date) => void;
   onSlotClick?: (date: Date) => void;
   onEventClick?: (event: CalendarEvent) => void;
 }
 
-export function WeekView({ startDate, events, use24h, onDayClick, onSlotClick, onEventClick }: WeekViewProps) {
+export function WeekView({ startDate, events, use24h, focusTime, onDayClick, onSlotClick, onEventClick }: WeekViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const days = useMemo(
@@ -43,19 +44,20 @@ export function WeekView({ startDate, events, use24h, onDayClick, onSlotClick, o
 
   useEffect(() => {
     if (!scrollRef.current) return;
-    const allEvents = Array.from(eventsByDate.values()).flat();
-    let scrollTop: number;
-    if (allEvents.length > 0) {
-      const first = allEvents.reduce((a, b) =>
-        new Date(a.startAt) < new Date(b.startAt) ? a : b
-      );
-      const d = new Date(first.startAt);
-      scrollTop = (d.getHours() * 60 + d.getMinutes()) / 30 * SLOT_HEIGHT - SLOT_HEIGHT * 2;
-    } else {
-      scrollTop = 8 * 2 * SLOT_HEIGHT;
+    let target: Date | null = focusTime ?? null;
+    if (!target) {
+      const allEvents = Array.from(eventsByDate.values()).flat();
+      if (allEvents.length > 0) {
+        target = new Date(
+          allEvents.reduce((a, b) => (new Date(a.startAt) < new Date(b.startAt) ? a : b)).startAt
+        );
+      }
     }
+    const scrollTop = target
+      ? (target.getHours() * 60 + target.getMinutes()) / 30 * SLOT_HEIGHT - SLOT_HEIGHT * 2
+      : 8 * 2 * SLOT_HEIGHT;
     scrollRef.current.scrollTop = Math.max(0, scrollTop);
-  }, [startDate]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [startDate, focusTime?.getTime()]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const now = new Date();
   const nowTop = (now.getHours() * 60 + now.getMinutes()) / 30 * SLOT_HEIGHT;

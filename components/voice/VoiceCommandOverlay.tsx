@@ -2,10 +2,21 @@
 
 import { useEffect, useState } from 'react';
 import { useSpeechRecognition, type SpeechErrorKind } from '@/lib/voice/useSpeechRecognition';
+import { parseVoiceCommand } from '@/lib/voice/parseVoiceCommand';
+import { matchEvents } from '@/lib/voice/matchEvents';
+import { applyModify } from '@/lib/voice/applyModify';
+import { formatDateCN, formatTimeCN } from '@/lib/calendar/date-utils';
+import type { CalendarEvent } from '@/types';
 
 interface Props {
-  /** 识别（或文字兜底）得到指令文本后回调，由页面据此打开编辑面板/路由。 */
-  onSubmit: (text: string) => void;
+  /** create / unknown：把原文交给页面，打开编辑面板预填。 */
+  onCreate: (text: string) => void;
+  /** modify：传入已 patch 的事件，页面以编辑模式打开供用户确认。 */
+  onModify: (event: CalendarEvent) => void;
+  /** query：跳转到目标日的日视图。 */
+  onQuery: (date: Date) => void;
+  /** 删除成功后通知页面刷新。 */
+  onChanged: () => void;
   onClose: () => void;
 }
 
@@ -18,27 +29,108 @@ const ERROR_MESSAGES: Record<SpeechErrorKind, string> = {
   unknown: '识别出错，请重试或改用文字',
 };
 
-export function VoiceCommandOverlay({ onSubmit, onClose }: Props) {
+type Result =
+  | { kind: 'notfound'; intent: 'delete' | 'modify' }
+  | { kind: 'delete'; events: CalendarEvent[] }
+  | { kind: 'modify-pick'; events: CalendarEvent[]; pick: (e: CalendarEvent) => void }
+  | { kind: 'query'; date: Date; events: CalendarEvent[] };
+
+function dayRange(d: Date): [Date, Date] {
+  const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
+  const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59);
+  return [start, end];
+}
+
+// 未说日期时的兜底范围：昨天 ~ 60 天后，按标题匹配
+function fallbackRange(): [Date, Date] {
+  const now = new Date();
+  const start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const end = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000);
+  return [start, end];
+}
+
+async function fetchRange([start, end]: [Date, Date]): Promise<CalendarEvent[]> {
+  const res = await fetch(
+    `/api/events?start=${start.toISOString()}&end=${end.toISOString()}`
+  );
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, onClose }: Props) {
   const [textMode, setTextMode] = useState(false);
   const [textInput, setTextInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<Result | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const { supported, listening, interimText, error, start, stop } = useSpeechRecognition({
-    onResult: (text) => {
-      if (text) onSubmit(text);
-    },
+    onResult: (text) => { if (text) void handleCommand(text); },
   });
 
-  // 打开时：支持语音则自动开始听；否则降级为文字输入
   useEffect(() => {
     if (supported) start();
     else setTextMode(true);
-    // 仅在 supported 确定后执行一次
   }, [supported, start]);
 
-  // 致命错误（权限/不支持）自动切到文字兜底
   useEffect(() => {
     if (error === 'not-allowed' || error === 'unsupported') setTextMode(true);
   }, [error]);
+
+  async function handleCommand(text: string) {
+    setActionError(null);
+    const parsed = parseVoiceCommand(text, new Date());
+
+    // create / unknown：交给页面打开编辑面板预填
+    if (parsed.intent === 'create' || parsed.intent === 'unknown') {
+      onCreate(text);
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const targetDate = parsed.hasDate && parsed.startAt ? new Date(parsed.startAt) : new Date();
+      const events = await fetchRange(parsed.hasDate ? dayRange(targetDate) : fallbackRange());
+
+      if (parsed.intent === 'query') {
+        onQuery(targetDate);
+        setResult({ kind: 'query', date: targetDate, events });
+        return;
+      }
+
+      const matches = matchEvents(events, {
+        date: targetDate,
+        hasDate: parsed.hasDate,
+        title: parsed.title,
+      });
+
+      if (matches.length === 0) {
+        setResult({ kind: 'notfound', intent: parsed.intent });
+        return;
+      }
+
+      if (parsed.intent === 'modify') {
+        if (matches.length === 1) {
+          onModify(applyModify(matches[0], parsed));
+          return;
+        }
+        setResult({
+          kind: 'modify-pick',
+          events: matches,
+          pick: (e) => onModify(applyModify(e, parsed)),
+        });
+        return;
+      }
+
+      // delete
+      setResult({ kind: 'delete', events: matches });
+    } catch {
+      setActionError('处理失败，请重试');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   function handleClose() {
     stop();
@@ -47,7 +139,33 @@ export function VoiceCommandOverlay({ onSubmit, onClose }: Props) {
 
   function submitText() {
     const t = textInput.trim();
-    if (t) onSubmit(t);
+    if (t) void handleCommand(t);
+  }
+
+  async function handleDelete(id: string) {
+    setDeletingId(id);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/events/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error();
+      onChanged();
+      onClose();
+    } catch {
+      setActionError('删除失败，请重试');
+      setDeletingId(null);
+    }
+  }
+
+  function eventRow(e: CalendarEvent) {
+    const d = new Date(e.startAt);
+    return (
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-gray-800 font-medium flex-1 break-words">{e.title}</span>
+        <span className="text-xs text-gray-500 flex-shrink-0">
+          {formatDateCN(d)} {formatTimeCN(d)}
+        </span>
+      </div>
+    );
   }
 
   return (
@@ -67,9 +185,89 @@ export function VoiceCommandOverlay({ onSubmit, onClose }: Props) {
           </button>
         </div>
 
-        {!textMode ? (
+        {/* 处理结果区 */}
+        {result ? (
+          <div className="px-5 py-5 space-y-3">
+            {result.kind === 'notfound' && (
+              <p className="text-sm text-gray-600">
+                未找到匹配的事件，换个说法或改用{result.intent === 'delete' ? '手动删除' : '手动编辑'}试试。
+              </p>
+            )}
+
+            {result.kind === 'delete' && (
+              <>
+                <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">确认删除</p>
+                <div className="space-y-2">
+                  {result.events.map((e) => (
+                    <div key={e.id} className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3 flex items-center gap-3">
+                      <div className="flex-1 min-w-0">{eventRow(e)}</div>
+                      <button
+                        onClick={() => handleDelete(e.id)}
+                        disabled={deletingId === e.id}
+                        className="text-sm text-white bg-red-500 hover:bg-red-600 px-3 py-1 rounded-full transition disabled:opacity-50 flex-shrink-0"
+                      >
+                        {deletingId === e.id ? '删除中…' : '删除'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {result.kind === 'modify-pick' && (
+              <>
+                <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">选择要修改的事件</p>
+                <div className="space-y-2">
+                  {result.events.map((e) => (
+                    <button
+                      key={e.id}
+                      onClick={() => result.pick(e)}
+                      className="w-full text-left rounded-xl bg-gray-50 border border-gray-100 hover:border-blue-300 px-4 py-3 transition"
+                    >
+                      {eventRow(e)}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {result.kind === 'query' && (
+              <>
+                <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">
+                  {formatDateCN(result.date)} 的安排（{result.events.length}）
+                </p>
+                {result.events.length === 0 ? (
+                  <p className="text-sm text-gray-500">这天没有安排。</p>
+                ) : (
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {result.events.map((e) => (
+                      <div key={e.id} className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3">
+                        {eventRow(e)}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {actionError && <p className="text-xs text-red-500">{actionError}</p>}
+
+            <div className="flex justify-end pt-1">
+              <button
+                onClick={handleClose}
+                className="px-4 py-1.5 text-sm text-gray-500 hover:bg-gray-100 rounded-full transition"
+              >
+                关闭
+              </button>
+            </div>
+          </div>
+        ) : busy ? (
+          <div className="px-5 py-10 flex flex-col items-center gap-3">
+            <span className="text-2xl animate-pulse">⏳</span>
+            <p className="text-sm text-gray-500">处理中…</p>
+          </div>
+        ) : !textMode ? (
           <div className="px-5 py-8 flex flex-col items-center gap-5">
-            {/* Mic indicator */}
             <button
               onClick={listening ? stop : start}
               className={`w-20 h-20 rounded-full flex items-center justify-center text-3xl transition ${
@@ -86,20 +284,16 @@ export function VoiceCommandOverlay({ onSubmit, onClose }: Props) {
               {listening ? '正在聆听，说完会自动停止…' : '点击麦克风开始说话'}
             </p>
 
-            {/* 实时识别文字 */}
             {interimText && (
-              <p className="text-base text-gray-800 text-center break-words px-2">
-                {interimText}
-              </p>
+              <p className="text-base text-gray-800 text-center break-words px-2">{interimText}</p>
             )}
 
-            {/* 错误提示（非致命，可重试） */}
             {error && error !== 'not-allowed' && error !== 'unsupported' && (
               <p className="text-xs text-amber-600">{ERROR_MESSAGES[error]}</p>
             )}
 
-            <p className="text-xs text-gray-400 text-center">
-              例：明天下午3点开组会
+            <p className="text-xs text-gray-400 text-center leading-relaxed">
+              试试：明天下午3点开组会 · 删除明天的组会 · 明天有什么安排
             </p>
 
             <button
@@ -111,9 +305,7 @@ export function VoiceCommandOverlay({ onSubmit, onClose }: Props) {
           </div>
         ) : (
           <div className="px-5 py-5 flex flex-col gap-3">
-            {error && (
-              <p className="text-xs text-amber-600">{ERROR_MESSAGES[error]}</p>
-            )}
+            {error && <p className="text-xs text-amber-600">{ERROR_MESSAGES[error]}</p>}
             <textarea
               autoFocus
               value={textInput}
@@ -121,7 +313,7 @@ export function VoiceCommandOverlay({ onSubmit, onClose }: Props) {
               onKeyDown={(e) => {
                 if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') submitText();
               }}
-              placeholder={'用自然语言描述\n例：明天下午3点开组会'}
+              placeholder={'用自然语言描述\n例：明天下午3点开组会 / 删除明天的组会'}
               rows={3}
               className="w-full resize-none text-sm text-gray-800 placeholder-gray-400 border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
             />
