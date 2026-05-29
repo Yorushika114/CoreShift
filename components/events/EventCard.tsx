@@ -10,7 +10,7 @@ interface EventCardProps {
 }
 
 export function EventCard({ event, compact = false, onClick }: EventCardProps) {
-  const color = colorFor(event.id);
+  const color = colorFor(event);
   const time = formatTimeCN(new Date(event.startAt));
   const label = event.allDay
     ? event.title

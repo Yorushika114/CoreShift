@@ -10,6 +10,7 @@ function toCalendarEvent(e: {
   reminderAt: Date | null;
   allDay: boolean;
   recurrence: string | null;
+  color: string;
   createdAt: Date;
   updatedAt: Date;
   sourceText: string | null;
@@ -22,6 +23,7 @@ function toCalendarEvent(e: {
     reminderAt: e.reminderAt?.toISOString() ?? null,
     allDay: e.allDay,
     recurrence: e.recurrence ?? null,
+    color: e.color,
     createdAt: e.createdAt.toISOString(),
     updatedAt: e.updatedAt.toISOString(),
     sourceText: e.sourceText ?? null,
@@ -51,7 +53,7 @@ export async function getEvents(startDate?: Date, endDate?: Date): Promise<Calen
 
 export async function createEvent(
   data: Pick<CalendarEvent, 'title' | 'startAt'> &
-    Partial<Pick<CalendarEvent, 'endAt' | 'reminderAt' | 'allDay' | 'recurrence' | 'sourceText'>>
+    Partial<Pick<CalendarEvent, 'endAt' | 'reminderAt' | 'allDay' | 'recurrence' | 'sourceText' | 'color'>>
 ): Promise<CalendarEvent> {
   const event = await prisma.event.create({
     data: {
@@ -61,6 +63,7 @@ export async function createEvent(
       reminderAt: data.reminderAt ? new Date(data.reminderAt) : null,
       allDay: data.allDay ?? false,
       recurrence: data.recurrence ?? null,
+      color: data.color ?? 'blue',
       sourceText: data.sourceText ?? null,
     },
   });
@@ -69,7 +72,7 @@ export async function createEvent(
 
 export async function updateEvent(
   id: string,
-  data: Partial<Pick<CalendarEvent, 'title' | 'startAt' | 'endAt' | 'reminderAt' | 'allDay' | 'recurrence' | 'sourceText'>>
+  data: Partial<Pick<CalendarEvent, 'title' | 'startAt' | 'endAt' | 'reminderAt' | 'allDay' | 'recurrence' | 'sourceText' | 'color'>>
 ): Promise<CalendarEvent> {
   const event = await prisma.event.update({
     where: { id },
@@ -80,6 +83,7 @@ export async function updateEvent(
       ...(data.reminderAt !== undefined && { reminderAt: data.reminderAt ? new Date(data.reminderAt) : null }),
       ...(data.allDay !== undefined && { allDay: data.allDay }),
       ...(data.recurrence !== undefined && { recurrence: data.recurrence ?? null }),
+      ...(data.color !== undefined && { color: data.color ?? 'blue' }),
       ...(data.sourceText !== undefined && { sourceText: data.sourceText }),
     },
   });
