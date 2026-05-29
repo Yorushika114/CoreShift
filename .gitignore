@@ -39,6 +39,8 @@ next-env.d.ts
 /prisma/dev.db
 /prisma/dev.db-journal
 /app/generated/prisma
+dev.db
+dev.db-journal
 
 # tooling / IDE
 /.superpowers
