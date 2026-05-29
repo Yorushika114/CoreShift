@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useSpeechRecognition, type SpeechErrorKind } from '@/lib/voice/useSpeechRecognition';
+import { useTTS } from '@/lib/voice/useTTS';
 import { parseVoiceCommand } from '@/lib/voice/parseVoiceCommand';
 import { matchEvents } from '@/lib/voice/matchEvents';
 import { applyModify } from '@/lib/voice/applyModify';
@@ -70,6 +71,7 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
   const { supported, listening, interimText, error, start, stop } = useSpeechRecognition({
     onResult: (text) => { if (text) void handleCommand(text); },
   });
+  const { speak } = useTTS();
 
   useEffect(() => {
     if (supported) start();
@@ -102,6 +104,10 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
       if (parsed.intent === 'query') {
         onQuery(targetDate);
         setResult({ kind: 'query', date: targetDate, events });
+        const msg = events.length > 0
+          ? `${formatDateCN(targetDate)}有${events.length}个安排`
+          : `${formatDateCN(targetDate)}没有安排`;
+        void speak(msg);
         return;
       }
 
@@ -113,6 +119,7 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
 
       if (matches.length === 0) {
         setResult({ kind: 'notfound', intent: parsed.intent });
+        void speak('没有找到匹配的事件');
         return;
       }
 
@@ -133,6 +140,7 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
       setResult({ kind: 'delete', events: matches });
     } catch {
       setActionError('处理失败，请重试');
+      void speak('处理失败，请重试');
     } finally {
       setBusy(false);
     }
@@ -154,6 +162,7 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
     try {
       const res = await fetch(`/api/events/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error();
+      void speak('已成功删除');
       onChanged();
       onClose();
     } catch {
