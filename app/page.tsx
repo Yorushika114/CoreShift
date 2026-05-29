@@ -5,6 +5,9 @@ import { useState, useEffect, useCallback, useMemo, useTransition } from 'react'
 import { MiniCalendar } from '@/components/calendar/MiniCalendar';
 import { MonthGrid } from '@/components/calendar/MonthGrid';
 import { YearGrid } from '@/components/calendar/YearGrid';
+import { YearPickerPopup } from '@/components/calendar/YearPickerPopup';
+import { MonthPickerPopup } from '@/components/calendar/MonthPickerPopup';
+import { DayPickerPopup } from '@/components/calendar/DayPickerPopup';
 import { WeekView } from '@/components/calendar/WeekView';
 import { DayView } from '@/components/calendar/DayView';
 import { EventEditorPanel } from '@/components/voice/EventEditorPanel';
@@ -36,6 +39,7 @@ export default function CalendarPage() {
   const [viewDate, setViewDate] = useState(() => new Date());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showYearPicker, setShowYearPicker] = useState(false);
   const [editor, setEditor] = useState<EditorState>({ open: false });
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [, startTransition] = useTransition();
@@ -320,9 +324,44 @@ export default function CalendarPage() {
           >
             ›
           </button>
-          <h2 className="text-base font-normal text-gray-700 ml-1 flex-1">
-            {getNavTitle()}
-          </h2>
+          <div className="relative flex-1 ml-1">
+            <button
+              onClick={() => setShowYearPicker(v => !v)}
+              className="text-base font-normal text-gray-700 hover:text-blue-600 cursor-pointer"
+            >
+              {getNavTitle()}
+            </button>
+            {showYearPicker && view === 'year' && (
+              <YearPickerPopup
+                currentYear={viewDate.getFullYear()}
+                onSelect={year => setViewDate(new Date(year, 0, 1))}
+                onClose={() => setShowYearPicker(false)}
+              />
+            )}
+            {showYearPicker && view === 'month' && (
+              <MonthPickerPopup
+                currentYear={viewDate.getFullYear()}
+                currentMonth={viewDate.getMonth()}
+                onSelect={(year, month) => setViewDate(new Date(year, month, 1))}
+                onClose={() => setShowYearPicker(false)}
+              />
+            )}
+            {showYearPicker && view === 'week' && (
+              <MonthPickerPopup
+                currentYear={viewDate.getFullYear()}
+                currentMonth={viewDate.getMonth()}
+                onSelect={(year, month) => setViewDate(new Date(year, month, 1))}
+                onClose={() => setShowYearPicker(false)}
+              />
+            )}
+            {showYearPicker && view === 'day' && (
+              <DayPickerPopup
+                currentDate={viewDate}
+                onSelect={date => setViewDate(date)}
+                onClose={() => setShowYearPicker(false)}
+              />
+            )}
+          </div>
           {loading && (
             <span className="text-xs text-gray-400 animate-pulse">加载中…</span>
           )}
@@ -332,7 +371,7 @@ export default function CalendarPage() {
             {VIEW_TABS.map(tab => (
               <button
                 key={tab.value}
-                onClick={() => setView(tab.value)}
+                onClick={() => { setView(tab.value); setShowYearPicker(false); }}
                 className={`px-3 py-1 text-sm transition-colors ${
                   view === tab.value
                     ? 'bg-blue-600 text-white'
