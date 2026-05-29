@@ -75,3 +75,12 @@ export function formatTimeSlot(hour: number, minute: number, use24h: boolean): s
   const h = hour % 12 || 12;
   return `${period} ${h}:${mm}`;
 }
+
+export function getWeekStart(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+  const diff = day === 0 ? -6 : 1 - day; // shift to Monday
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
