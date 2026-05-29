@@ -7,6 +7,10 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const start = searchParams.get('start');
   const end = searchParams.get('end');
+  if (start && isNaN(new Date(start).getTime()))
+    return NextResponse.json({ error: 'Invalid start date' }, { status: 400 });
+  if (end && isNaN(new Date(end).getTime()))
+    return NextResponse.json({ error: 'Invalid end date' }, { status: 400 });
   try {
     const events = await getEvents(
       start ? new Date(start) : undefined,
