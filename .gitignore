@@ -44,3 +44,7 @@ dev.db-journal
 
 # tooling / IDE
 /.superpowers
+
+# Word temporary lock files
+~$*.docx
+~$*.doc
