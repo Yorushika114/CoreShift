@@ -31,7 +31,7 @@ interface EditorState {
 }
 
 export default function CalendarPage() {
-  const [view, setView] = useState<ViewMode>('month');
+  const [view, setView] = useState<ViewMode>('week');
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [viewDate, setViewDate] = useState(() => new Date());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -42,11 +42,13 @@ export default function CalendarPage() {
   // 保存后滚动到该时刻，保证新建/修改的事件立即可见；导航时清除
   const [focusTime, setFocusTime] = useState<Date | null>(null);
   const [reminderToasts, setReminderToasts] = useState<{ id: string; title: string; timeStr: string }[]>([]);
-  const [use24h, setUse24h] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true;
+  const [use24h, setUse24h] = useState<boolean>(true);
+
+  // 服务端与客户端初始值保持一致（true），hydrate 后再从 localStorage 同步
+  useEffect(() => {
     const saved = localStorage.getItem('use24h');
-    return saved === null ? true : saved === 'true';
-  });
+    if (saved !== null) setUse24h(saved === 'true');
+  }, []);
 
   const fetchEvents = useCallback(async (date: Date, currentView: ViewMode) => {
     setLoading(true);

@@ -524,9 +524,6 @@ export function EventEditorPanel({
           </div>
 
           <div className="flex items-center gap-2">
-            {tab === 'quick' && (
-              <span className="text-xs text-gray-400 mr-1">⌘↵ 快速保存</span>
-            )}
             <button
               onClick={onClose}
               className="px-4 py-1.5 text-sm text-gray-500 hover:bg-gray-100 rounded-full transition"
