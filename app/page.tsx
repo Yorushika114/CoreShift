@@ -47,12 +47,39 @@ export default function CalendarPage() {
   const [focusTime, setFocusTime] = useState<Date | null>(null);
   const [reminderToasts, setReminderToasts] = useState<{ id: string; title: string; timeStr: string }[]>([]);
   const [use24h, setUse24h] = useState<boolean>(true);
+  const [googleConnected, setGoogleConnected] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
 
   // 服务端与客户端初始值保持一致（true），hydrate 后再从 localStorage 同步
   useEffect(() => {
     const saved = localStorage.getItem('use24h');
     if (saved !== null) setUse24h(saved === 'true');
   }, []);
+
+  useEffect(() => {
+    fetch('/api/auth/status').then(r => r.json()).then(d => setGoogleConnected(d.connected));
+  }, []);
+
+  async function handleSync() {
+    setSyncing(true);
+    setSyncMsg(null);
+    try {
+      const res = await fetch('/api/sync', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        setSyncMsg(`同步完成：拉取 ${data.pulled} 个，推送 ${data.pushed} 个`);
+        fetchEvents(viewDate, view);
+      } else {
+        setSyncMsg('同步失败，请重试');
+      }
+    } catch {
+      setSyncMsg('同步失败，请检查网络');
+    } finally {
+      setSyncing(false);
+      setTimeout(() => setSyncMsg(null), 4000);
+    }
+  }
 
   const fetchEvents = useCallback(async (date: Date, currentView: ViewMode) => {
     setLoading(true);
@@ -311,6 +338,32 @@ export default function CalendarPage() {
             <span className="text-base">🎙</span>
             语音输入
           </button>
+
+          {googleConnected ? (
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-1.5 text-xs text-green-600 px-1">
+                <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+                Google 日历已连接
+              </div>
+              <button
+                onClick={handleSync}
+                disabled={syncing}
+                className="flex items-center justify-center gap-2 border border-gray-200 rounded-lg p-3 text-sm text-gray-600 hover:bg-gray-50 hover:border-blue-300 transition disabled:opacity-50"
+              >
+                <span className="text-base">{syncing ? '⏳' : '🔄'}</span>
+                {syncing ? '同步中…' : '同步 Google 日历'}
+              </button>
+              {syncMsg && <p className="text-xs text-gray-500 px-1">{syncMsg}</p>}
+            </div>
+          ) : (
+            <a
+              href="/api/auth/google"
+              className="flex items-center justify-center gap-2 border border-gray-200 rounded-lg p-3 text-sm text-gray-600 hover:bg-gray-50 hover:border-blue-300 transition"
+            >
+              <span className="text-base">🗓</span>
+              连接 Google 日历
+            </a>
+          )}
 
         </div>
       </aside>
