@@ -132,6 +132,27 @@ function resolveTime(base: Date, text: string): Date {
   return d;
 }
 
+// 相对时间偏移："N小时后"、"半小时后"、"N分钟后" —— 从当前时刻起算，保留具体时分
+function resolveRelativeOffset(baseDate: Date, text: string): Date | null {
+  // 半（个）小时/钟头后 → +30 分钟
+  if (/半个?(?:小时|钟头)[后後]/.test(text)) {
+    return new Date(baseDate.getTime() + 30 * 60000);
+  }
+  // N（个）小时/钟头后
+  const hourMatch = text.match(/(\d+|[一二三四五六七八九十两]+)个?(?:小时|钟头)[后後]/);
+  if (hourMatch) {
+    const n = chineseNumToInt(hourMatch[1]);
+    if (!isNaN(n)) return new Date(baseDate.getTime() + n * 3600000);
+  }
+  // N分钟后
+  const minMatch = text.match(/(\d+|[一二三四五六七八九十两]+)分钟?[后後]/);
+  if (minMatch) {
+    const n = chineseNumToInt(minMatch[1]);
+    if (!isNaN(n)) return new Date(baseDate.getTime() + n * 60000);
+  }
+  return null;
+}
+
 export type ParsedTime = {
   date: Date;
   hasDate: boolean;
@@ -162,6 +183,12 @@ export function extractReminderOffset(text: string): number | null {
 }
 
 export function parseChineseTime(text: string, baseDate: Date = new Date()): ParsedTime {
+  // 相对时间偏移优先（保留当前具体时分，故在归零小时前处理）
+  const offsetDate = resolveRelativeOffset(baseDate, text);
+  if (offsetDate) {
+    return { date: offsetDate, hasDate: true, hasTime: true };
+  }
+
   const base = new Date(baseDate);
   base.setHours(0, 0, 0, 0);
 

@@ -188,3 +188,43 @@ describe('完整句子', () => {
     expect(hasTime).toBe(false);
   });
 });
+
+describe('相对时间偏移（N小时后/分钟后，从当前时刻算）', () => {
+  // 带具体时刻的基准：2026-05-29 14:30
+  const TIMED = new Date(2026, 4, 29, 14, 30, 0, 0);
+  const p = (t: string) => parseChineseTime(t, TIMED);
+
+  it('一小时后 → +1 小时，保留分钟', () => {
+    const { date, hasDate, hasTime } = p('一小时后上课');
+    expect(hasDate).toBe(true);
+    expect(hasTime).toBe(true);
+    expect(date.getHours()).toBe(15);
+    expect(date.getMinutes()).toBe(30);
+    expect(date.getDate()).toBe(29);
+  });
+
+  it('两个小时后 → +2 小时', () => {
+    const { date } = p('两个小时后开会');
+    expect(date.getHours()).toBe(16);
+    expect(date.getMinutes()).toBe(30);
+  });
+
+  it('半小时后 → +30 分钟', () => {
+    const { date } = p('半小时后开会');
+    expect(date.getHours()).toBe(15);
+    expect(date.getMinutes()).toBe(0);
+  });
+
+  it('30分钟后 → +30 分钟', () => {
+    const { date } = p('30分钟后取快递');
+    expect(date.getHours()).toBe(15);
+    expect(date.getMinutes()).toBe(0);
+  });
+
+  it('跨天：晚上23点 + 两小时 → 次日 1 点', () => {
+    const late = new Date(2026, 4, 29, 23, 0, 0, 0);
+    const { date } = parseChineseTime('两小时后', late);
+    expect(date.getDate()).toBe(30);
+    expect(date.getHours()).toBe(1);
+  });
+});

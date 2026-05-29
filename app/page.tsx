@@ -38,6 +38,8 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(true);
   const [editor, setEditor] = useState<EditorState>({ open: false });
   const [voiceOpen, setVoiceOpen] = useState(false);
+  // 保存后滚动到该时刻，保证新建/修改的事件立即可见；导航时清除
+  const [focusTime, setFocusTime] = useState<Date | null>(null);
   const [reminderToasts, setReminderToasts] = useState<{ id: string; title: string; timeStr: string }[]>([]);
   const [use24h, setUse24h] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
@@ -123,12 +125,14 @@ export default function CalendarPage() {
 
   function goToToday() {
     const today = new Date();
+    setFocusTime(null);
     setSelectedDate(today);
     setViewDate(today);
     setView('day');
   }
 
   function goPrev() {
+    setFocusTime(null);
     if (view === 'year')
       setViewDate(d => new Date(d.getFullYear() - 1, d.getMonth(), 1));
     else if (view === 'month')
@@ -140,6 +144,7 @@ export default function CalendarPage() {
   }
 
   function goNext() {
+    setFocusTime(null);
     if (view === 'year')
       setViewDate(d => new Date(d.getFullYear() + 1, d.getMonth(), 1));
     else if (view === 'month')
@@ -172,17 +177,38 @@ export default function CalendarPage() {
     setEditor({ open: true, event: original });
   }
 
-  // 语音/文字指令 → PR1 暂统一走创建，预填进编辑面板由用户确认
-  function handleVoiceSubmit(text: string) {
+  // 语音指令路由（浮层据 intent 调用）
+  function handleVoiceCreate(text: string) {
     setVoiceOpen(false);
     setEditor({ open: true, defaultStartAt: selectedDate, initialText: text });
+  }
+
+  function handleVoiceModify(patchedEvent: CalendarEvent) {
+    setVoiceOpen(false);
+    setEditor({ open: true, event: patchedEvent });
+  }
+
+  function handleVoiceQuery(date: Date) {
+    // 跳到目标日日视图（浮层留在前面显示摘要，用户关闭后即见）
+    setSelectedDate(date);
+    setViewDate(date);
+    setView('day');
+  }
+
+  function handleVoiceChanged() {
+    fetchEvents(viewDate, view);
   }
 
   function handleEditorSaved(saved: CalendarEvent) {
     const eventDate = new Date(saved.startAt);
     setEditor({ open: false });
+    // 跳转到新事件所在日期+时刻，保证创建/修改后立即可见（事件可能落在当前视图范围/可视区外）
+    const nextView: ViewMode = view === 'year' ? 'month' : view;
+    setSelectedDate(eventDate);
     setViewDate(eventDate);
-    fetchEvents(eventDate, view);
+    setView(nextView);
+    setFocusTime(eventDate);
+    fetchEvents(eventDate, nextView);
   }
 
   function handleEditorDeleted() {
@@ -335,6 +361,7 @@ export default function CalendarPage() {
             startDate={getWeekStart(viewDate)}
             events={expandedEvents}
             use24h={use24h}
+            focusTime={focusTime}
             onDayClick={handleDayClick}
             onSlotClick={openCreateEditor}
             onEventClick={openEditEditor}
@@ -345,6 +372,7 @@ export default function CalendarPage() {
             date={viewDate}
             events={expandedEvents}
             use24h={use24h}
+            focusTime={focusTime}
             onSlotClick={openCreateEditor}
             onEventClick={openEditEditor}
           />
@@ -364,7 +392,10 @@ export default function CalendarPage() {
 
       {voiceOpen && (
         <VoiceCommandOverlay
-          onSubmit={handleVoiceSubmit}
+          onCreate={handleVoiceCreate}
+          onModify={handleVoiceModify}
+          onQuery={handleVoiceQuery}
+          onChanged={handleVoiceChanged}
           onClose={() => setVoiceOpen(false)}
         />
       )}
