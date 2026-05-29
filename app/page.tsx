@@ -348,6 +348,8 @@ export default function CalendarPage() {
             year={viewDate.getFullYear()}
             events={expandedEvents}
             onMonthClick={handleMonthClick}
+            onNextYear={goNext}
+            onPrevYear={goPrev}
           />
         )}
         {view === 'month' && (
