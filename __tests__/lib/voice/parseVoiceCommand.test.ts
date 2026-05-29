@@ -16,6 +16,18 @@ describe('标题剥离', () => {
     expect(d.getHours()).toBe(15);
   });
 
+  it('截止类表达：剥离"之前"后标题干净', () => {
+    const c = cmd('后天之前完成比赛');
+    expect(c.title).toBe('完成比赛');
+    const d = new Date(c.startAt!);
+    expect(d.getDate()).toBe(31); // 后天 = 5-31
+  });
+
+  it('截止类表达：多字标题', () => {
+    const c = cmd('后天之前完成项目报告');
+    expect(c.title).toBe('完成项目报告');
+  });
+
   it('完整句子：明天下午3点开组会', () => {
     const c = cmd('明天下午3点开组会');
     expect(c.title).toBe('开组会');
