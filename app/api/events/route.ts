@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getEvents, createEvent } from '@/lib/calendar/events';
 import { eventBus } from '@/lib/sse/eventBus';
+import { pushEventToGoogle } from '@/lib/google/calendar';
+import { prisma } from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -30,6 +32,19 @@ export async function POST(request: NextRequest) {
     }
     const event = await createEvent(body);
     eventBus.broadcast('created');
+
+    // Real-time push to Google Calendar (non-blocking on failure)
+    pushEventToGoogle(event)
+      .then(async (googleId) => {
+        if (googleId) {
+          await prisma.event.update({
+            where: { id: event.id },
+            data: { googleEventId: googleId, googleUpdatedAt: new Date() },
+          });
+        }
+      })
+      .catch((e) => console.error('Google push failed:', e));
+
     return NextResponse.json(event, { status: 201 });
   } catch (e) {
     return NextResponse.json({ error: 'Failed to create event' }, { status: 500 });

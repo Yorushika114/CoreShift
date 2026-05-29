@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updateEvent, deleteEvent } from '@/lib/calendar/events';
 import { eventBus } from '@/lib/sse/eventBus';
+import { updateEventInGoogle, deleteEventFromGoogle } from '@/lib/google/calendar';
+import { prisma } from '@/lib/prisma';
 
 export async function PUT(
   request: NextRequest,
@@ -11,6 +13,16 @@ export async function PUT(
     const body = await request.json();
     const event = await updateEvent(params.id, body);
     eventBus.broadcast('updated');
+
+    // Real-time push to Google Calendar
+    prisma.event.findUnique({ where: { id: params.id }, select: { googleEventId: true } })
+      .then(async (row) => {
+        if (row?.googleEventId) {
+          await updateEventInGoogle(row.googleEventId, event);
+        }
+      })
+      .catch((e) => console.error('Google update failed:', e));
+
     return NextResponse.json(event);
   } catch (e) {
     return NextResponse.json({ error: 'Failed to update event' }, { status: 500 });
@@ -22,8 +34,14 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    const row = await prisma.event.findUnique({ where: { id: params.id }, select: { googleEventId: true } });
     await deleteEvent(params.id);
     eventBus.broadcast('deleted');
+
+    if (row?.googleEventId) {
+      deleteEventFromGoogle(row.googleEventId).catch((e) => console.error('Google delete failed:', e));
+    }
+
     return new NextResponse(null, { status: 204 });
   } catch (e) {
     return NextResponse.json({ error: 'Failed to delete event' }, { status: 500 });
