@@ -3,7 +3,9 @@ import type { ParsedCommand } from '@/types';
 
 // 时间相关词汇，用于从原文中剥离出标题
 const TIME_PATTERNS = [
-  /(\d{1,2}|[一二三四五六七八九十两]+)[点時时][钟]?[半]?(\d{1,2}|[一二三四五六七八九十零]+分?)?/,
+  // "X点到Y点" 或 "X点，到，Y点" 或 "X点到明天早上Y点"：允许标点/空格，也允许日期词
+  /(?<=[点時时钟][，,、。\s]{0,3})到[，,、。\s]*(今天|今日|明天|明日|后天|大后天)?[，,、。\s]*(凌晨|早上|上午|中午|下午|傍晚|晚上|晚)?(\d{1,2}|[一二三四五六七八九十两]+)[点時时][钟]?[半]?(\d{1,2}分?|[一二三四五六七八九十零]+分?)?/,
+  /(\d{1,2}|[一二三四五六七八九十两]+)[点時时][钟]?[半]?(\d{1,2}分?|[一二三四五六七八九十零]+分?)?/,
   /(下下周|下周|下个周|这周|本周|这个周)(日|天|一|二|三|四|五|六)/,
   /(下下个?月|下个?月|这个?月|本月)(\d{1,2}|[一二三四五六七八九十]+)[日号]/,
   /(\d{1,2}|[一二三四五六七八九十]+)月(\d{1,2}|[一二三四五六七八九十]+)[日号]/,
@@ -14,7 +16,6 @@ const TIME_PATTERNS = [
   /(\d+|[一二三四五六七八九十两]+)分钟?[后後]/,
   /大后天|今天|今日|明天|明日|后天/,
   /凌晨|早上|上午|中午|下午|傍晚|晚上|夜晚?|晚/,
-  /到(\d{1,2}|[一二三四五六七八九十两]+)[点時时]/,
   // 截止类语义词
   /之前|以前|截止|之内|以内|前完成/,
   // 提醒短语
@@ -51,16 +52,20 @@ function detectIntent(text: string): ParsedCommand['intent'] {
   return 'create';
 }
 
-// 提取结束时间（"X点到Y点"中的Y点）
+// 提取结束时间：取文本中最后一个 "到X点" 的时间（极端情况多个"到"取最后一个）
 function extractEndTime(text: string, startDate: Date): string | undefined {
-  const endMatch = text.match(/到(\d{1,2}|[一二三四五六七八九十两]+)[点時时]([半]|\d{1,2})?/);
-  if (!endMatch) return undefined;
-  const endText = endMatch[0].replace(/^到/, '');
-  // 从原文中找时段前缀
-  const periodMatch = text.match(/(上午|下午|早上|晚上)/);
-  const fullEndText = periodMatch ? `${periodMatch[0]}${endText}` : endText;
+  // 回顾断言：要求"到"前面是时间字符，避免把"推迟到/改到"误判为结束时间
+  const endPattern = /(?<=[点時时钟][，,、。\s]{0,3})到[，,、。\s]*(今天|今日|明天|明日|后天|大后天)?[，,、。\s]*(凌晨|早上|上午|中午|下午|傍晚|晚上|晚)?(\d{1,2}|[一二三四五六七八九十两]+)[点時时]([半]|\d{1,2}分?|[一二三四五六七八九十零]+分?)?/g;
+  let lastMatch: RegExpExecArray | null = null;
+  let m: RegExpExecArray | null;
+  while ((m = endPattern.exec(text)) !== null) lastMatch = m;
+  if (!lastMatch) return undefined;
+  const datePart = lastMatch[1] ?? '';
+  const period = lastMatch[2] ?? '';
+  const minPart = lastMatch[4] ?? '';
+  const fullEndText = `${datePart}${period}${lastMatch[3]}点${minPart}`;
   const { date } = parseChineseTime(fullEndText, startDate);
-  if (date <= startDate) date.setDate(date.getDate() + 1); // 跨天容错
+  if (date <= startDate) date.setDate(date.getDate() + 1);
   return date.toISOString();
 }
 
