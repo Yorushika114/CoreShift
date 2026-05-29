@@ -6,6 +6,8 @@ import {
   formatMonthYear,
   formatTimeCN,
   toISODateString,
+  formatDayTitle,
+  formatTimeSlot,
 } from '@/lib/calendar/date-utils';
 
 describe('getCalendarDays', () => {
@@ -86,5 +88,52 @@ describe('toISODateString', () => {
 
   it('pads month and day', () => {
     expect(toISODateString(new Date(2026, 0, 5))).toBe('2026-01-05');
+  });
+});
+
+describe('formatDayTitle', () => {
+  it('formats date with weekday in Chinese', () => {
+    // 2026-05-29 is a Friday (周五)
+    expect(formatDayTitle(new Date(2026, 4, 29))).toBe('2026年5月29日 周五');
+  });
+
+  it('formats Monday correctly', () => {
+    // 2026-05-25 is a Monday (周一)
+    expect(formatDayTitle(new Date(2026, 4, 25))).toBe('2026年5月25日 周一');
+  });
+
+  it('formats Tuesday correctly', () => {
+    // 2026-05-26 is a Tuesday (周二)
+    expect(formatDayTitle(new Date(2026, 4, 26))).toBe('2026年5月26日 周二');
+  });
+});
+
+describe('formatTimeSlot', () => {
+  it('formats 24h midnight', () => {
+    expect(formatTimeSlot(0, 0, true)).toBe('00:00');
+  });
+
+  it('formats 24h afternoon', () => {
+    expect(formatTimeSlot(15, 30, true)).toBe('15:30');
+  });
+
+  it('formats 24h pads single-digit hour', () => {
+    expect(formatTimeSlot(9, 0, true)).toBe('09:00');
+  });
+
+  it('formats 12h morning', () => {
+    expect(formatTimeSlot(9, 0, false)).toBe('上午 9:00');
+  });
+
+  it('formats 12h afternoon', () => {
+    expect(formatTimeSlot(15, 30, false)).toBe('下午 3:30');
+  });
+
+  it('formats 12h noon as 下午 12:00', () => {
+    expect(formatTimeSlot(12, 0, false)).toBe('下午 12:00');
+  });
+
+  it('formats 12h midnight as 上午 12:00', () => {
+    expect(formatTimeSlot(0, 0, false)).toBe('上午 12:00');
   });
 });

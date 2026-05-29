@@ -59,3 +59,19 @@ export function toISODateString(date: Date): string {
   const d = date.getDate().toString().padStart(2, '0');
   return `${y}-${m}-${d}`;
 }
+
+const WEEK_DAYS_CN = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+export function formatDayTitle(date: Date): string {
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${WEEK_DAYS_CN[date.getDay()]}`;
+}
+
+export function formatTimeSlot(hour: number, minute: number, use24h: boolean): string {
+  const mm = minute.toString().padStart(2, '0');
+  if (use24h) {
+    return `${hour.toString().padStart(2, '0')}:${mm}`;
+  }
+  const period = hour < 12 ? '上午' : '下午';
+  const h = hour % 12 || 12;
+  return `${period} ${h}:${mm}`;
+}
