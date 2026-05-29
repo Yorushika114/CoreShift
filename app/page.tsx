@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { MiniCalendar } from '@/components/calendar/MiniCalendar';
 import { MonthGrid } from '@/components/calendar/MonthGrid';
+import { AddEventModal } from '@/components/voice/AddEventModal';
 import { formatMonthYear } from '@/lib/calendar/date-utils';
 import type { CalendarEvent } from '@/types';
 
@@ -12,6 +13,7 @@ export default function CalendarPage() {
   const [viewDate, setViewDate] = useState(() => new Date());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   const fetchEvents = useCallback(async (date: Date) => {
     setLoading(true);
@@ -50,6 +52,13 @@ export default function CalendarPage() {
     setViewDate(new Date(today.getFullYear(), today.getMonth(), 1));
   }
 
+  function handleEventSaved(eventDate: Date) {
+    setShowAddModal(false);
+    setSelectedDate(eventDate);
+    setViewDate(new Date(eventDate.getFullYear(), eventDate.getMonth(), 1));
+    fetchEvents(eventDate);
+  }
+
   return (
     <div className="flex h-screen bg-white font-sans">
       {/* Left Sidebar */}
@@ -59,12 +68,21 @@ export default function CalendarPage() {
           <span className="text-lg font-medium text-gray-700">CoreShift</span>
         </div>
 
-        <button
-          onClick={goToToday}
-          className="text-sm border border-gray-300 rounded-full px-4 py-1.5 hover:bg-gray-50 text-gray-600 w-fit transition-colors"
-        >
-          今天
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={goToToday}
+            className="text-sm border border-gray-300 rounded-full px-4 py-1.5 hover:bg-gray-50 text-gray-600 transition-colors"
+          >
+            今天
+          </button>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-white bg-blue-500 hover:bg-blue-600 rounded-full transition shadow-sm"
+          >
+            <span className="text-base leading-none">+</span>
+            新建
+          </button>
+        </div>
 
         <MiniCalendar selectedDate={selectedDate} onDateSelect={handleDateSelect} />
 
@@ -106,6 +124,14 @@ export default function CalendarPage() {
           onDateClick={handleDateSelect}
         />
       </main>
+
+      {showAddModal && (
+        <AddEventModal
+          defaultDate={selectedDate}
+          onClose={() => setShowAddModal(false)}
+          onSaved={handleEventSaved}
+        />
+      )}
     </div>
   );
 }
