@@ -1,17 +1,7 @@
 // components/events/EventCard.tsx
 import { formatTimeCN } from '@/lib/calendar/date-utils';
+import { colorFor } from '@/lib/calendar/color-utils';
 import type { CalendarEvent } from '@/types';
-
-const COLORS = [
-  'bg-blue-500', 'bg-green-600', 'bg-red-500',
-  'bg-purple-500', 'bg-amber-500', 'bg-pink-500',
-];
-
-function colorFor(id: string): string {
-  let h = 0;
-  for (const c of id) h = (h * 31 + c.charCodeAt(0)) & 0xffff;
-  return COLORS[h % COLORS.length];
-}
 
 interface EventCardProps {
   event: CalendarEvent;
