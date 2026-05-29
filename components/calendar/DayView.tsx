@@ -12,10 +12,25 @@ interface DayViewProps {
   date: Date;
   events: CalendarEvent[];
   use24h: boolean;
+  onSlotClick?: (date: Date) => void;
+  onEventClick?: (event: CalendarEvent) => void;
 }
 
-export function DayView({ date, events, use24h }: DayViewProps) {
+export function DayView({ date, events, use24h, onSlotClick, onEventClick }: DayViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  function handleGridClick(e: React.MouseEvent<HTMLDivElement>) {
+    if (!onSlotClick) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const scrollTop = scrollRef.current?.scrollTop ?? 0;
+    const y = e.clientY - rect.top + scrollTop;
+    const slotIndex = Math.floor(y / SLOT_HEIGHT);
+    const hour = Math.min(Math.floor(slotIndex / 2), 23);
+    const minute = (slotIndex % 2) * 30;
+    const clicked = new Date(date);
+    clicked.setHours(hour, minute, 0, 0);
+    onSlotClick(clicked);
+  }
   const dateKey = toISODateString(date);
   const dayEvents = events.filter(
     e => toISODateString(new Date(e.startAt)) === dateKey
@@ -42,7 +57,11 @@ export function DayView({ date, events, use24h }: DayViewProps) {
 
   return (
     <div ref={scrollRef} className="flex-1 overflow-y-auto">
-      <div className="relative" style={{ height: `${48 * SLOT_HEIGHT}px` }}>
+      <div
+        className="relative"
+        style={{ height: `${48 * SLOT_HEIGHT}px` }}
+        onClick={handleGridClick}
+      >
         {/* Time slots */}
         {Array.from({ length: 48 }, (_, i) => {
           const hour = Math.floor(i / 2);
@@ -93,7 +112,8 @@ export function DayView({ date, events, use24h }: DayViewProps) {
             <div
               key={event.id}
               data-testid={`event-block-${event.id}`}
-              className={`absolute left-16 right-2 rounded-md px-2 py-1 ${colorFor(event.id)} text-white overflow-hidden`}
+              onClick={e => { e.stopPropagation(); onEventClick?.(event); }}
+              className={`absolute left-16 right-2 rounded-md px-2 py-1 ${colorFor(event.id)} text-white overflow-hidden ${onEventClick ? 'cursor-pointer hover:brightness-110' : ''}`}
               style={{ top: `${topPx}px`, height: `${heightPx}px` }}
             >
               <div className="text-xs font-medium truncate">{event.title}</div>

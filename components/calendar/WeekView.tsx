@@ -14,9 +14,11 @@ interface WeekViewProps {
   events: CalendarEvent[];
   use24h: boolean;
   onDayClick: (date: Date) => void;
+  onSlotClick?: (date: Date) => void;
+  onEventClick?: (event: CalendarEvent) => void;
 }
 
-export function WeekView({ startDate, events, use24h, onDayClick }: WeekViewProps) {
+export function WeekView({ startDate, events, use24h, onDayClick, onSlotClick, onEventClick }: WeekViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const days = useMemo(
@@ -57,6 +59,20 @@ export function WeekView({ startDate, events, use24h, onDayClick }: WeekViewProp
 
   const now = new Date();
   const nowTop = (now.getHours() * 60 + now.getMinutes()) / 30 * SLOT_HEIGHT;
+
+  function handleColumnClick(e: React.MouseEvent<HTMLDivElement>, day: Date) {
+    if (!onSlotClick) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const scrollTop = scrollRef.current?.scrollTop ?? 0;
+    // subtract sticky header height (approx 56px) from scroll offset
+    const y = e.clientY - rect.top + scrollTop;
+    const slotIndex = Math.floor(y / SLOT_HEIGHT);
+    const hour = Math.min(Math.floor(slotIndex / 2), 23);
+    const minute = (slotIndex % 2) * 30;
+    const clicked = new Date(day);
+    clicked.setHours(hour, minute, 0, 0);
+    onSlotClick(clicked);
+  }
 
   return (
     // scrollRef on the outer container so header sticky works correctly,
@@ -110,7 +126,11 @@ export function WeekView({ startDate, events, use24h, onDayClick }: WeekViewProp
             const today = isToday(day);
 
             return (
-              <div key={colIndex} className="flex-1 relative border-l border-gray-200">
+              <div
+                key={colIndex}
+                className={`flex-1 relative border-l border-gray-200 ${onSlotClick ? 'cursor-cell' : ''}`}
+                onClick={e => handleColumnClick(e, day)}
+              >
                 {/* Slot grid lines */}
                 {Array.from({ length: 48 }, (_, i) => (
                   <div
@@ -144,7 +164,8 @@ export function WeekView({ startDate, events, use24h, onDayClick }: WeekViewProp
                     <div
                       key={event.id}
                       data-testid={`week-event-${event.id}`}
-                      className={`absolute inset-x-0.5 rounded px-1 py-0.5 ${colorFor(event.id)} text-white overflow-hidden`}
+                      onClick={e => { e.stopPropagation(); onEventClick?.(event); }}
+                      className={`absolute inset-x-0.5 rounded px-1 py-0.5 ${colorFor(event.id)} text-white overflow-hidden ${onEventClick ? 'cursor-pointer hover:brightness-110' : ''}`}
                       style={{ top: `${topPx}px`, height: `${heightPx}px` }}
                     >
                       <div className="text-xs font-medium truncate">{event.title}</div>

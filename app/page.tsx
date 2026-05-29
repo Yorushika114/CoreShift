@@ -7,7 +7,7 @@ import { MonthGrid } from '@/components/calendar/MonthGrid';
 import { YearGrid } from '@/components/calendar/YearGrid';
 import { WeekView } from '@/components/calendar/WeekView';
 import { DayView } from '@/components/calendar/DayView';
-import { AddEventModal } from '@/components/voice/AddEventModal';
+import { EventEditorPanel } from '@/components/voice/EventEditorPanel';
 import { formatMonthYear, formatDayTitle, getWeekStart } from '@/lib/calendar/date-utils';
 import type { CalendarEvent } from '@/types';
 
@@ -20,13 +20,19 @@ const VIEW_TABS: { label: string; value: ViewMode }[] = [
   { label: '日', value: 'day' },
 ];
 
+interface EditorState {
+  open: boolean;
+  event?: CalendarEvent;
+  defaultStartAt?: Date;
+}
+
 export default function CalendarPage() {
   const [view, setView] = useState<ViewMode>('month');
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [viewDate, setViewDate] = useState(() => new Date());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [editor, setEditor] = useState<EditorState>({ open: false });
   const [use24h, setUse24h] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
     const saved = localStorage.getItem('use24h');
@@ -76,13 +82,6 @@ export default function CalendarPage() {
     setView('day');
   }
 
-  function handleEventSaved(eventDate: Date) {
-    setShowAddModal(false);
-    setSelectedDate(eventDate);
-    setViewDate(new Date(eventDate.getFullYear(), eventDate.getMonth(), 1));
-    fetchEvents(new Date(eventDate.getFullYear(), eventDate.getMonth(), 1), 'month');
-  }
-
   function goPrev() {
     if (view === 'year')
       setViewDate(d => new Date(d.getFullYear() - 1, d.getMonth(), 1));
@@ -114,6 +113,24 @@ export default function CalendarPage() {
     setSelectedDate(date);
     setViewDate(date);
     setView('day');
+  }
+
+  function openCreateEditor(defaultStartAt?: Date) {
+    setEditor({ open: true, defaultStartAt: defaultStartAt ?? selectedDate });
+  }
+
+  function openEditEditor(event: CalendarEvent) {
+    setEditor({ open: true, event });
+  }
+
+  function handleEditorSaved(saved: CalendarEvent) {
+    setEditor({ open: false });
+    fetchEvents(viewDate, view);
+  }
+
+  function handleEditorDeleted() {
+    setEditor({ open: false });
+    fetchEvents(viewDate, view);
   }
 
   function getNavTitle(): string {
@@ -149,7 +166,7 @@ export default function CalendarPage() {
             今天
           </button>
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={() => openCreateEditor()}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-white bg-blue-500 hover:bg-blue-600 rounded-full transition shadow-sm"
           >
             <span className="text-base leading-none">+</span>
@@ -257,18 +274,28 @@ export default function CalendarPage() {
             events={events}
             use24h={use24h}
             onDayClick={handleDayClick}
+            onSlotClick={openCreateEditor}
+            onEventClick={openEditEditor}
           />
         )}
         {view === 'day' && (
-          <DayView date={viewDate} events={events} use24h={use24h} />
+          <DayView
+            date={viewDate}
+            events={events}
+            use24h={use24h}
+            onSlotClick={openCreateEditor}
+            onEventClick={openEditEditor}
+          />
         )}
       </main>
 
-      {showAddModal && (
-        <AddEventModal
-          defaultDate={selectedDate}
-          onClose={() => setShowAddModal(false)}
-          onSaved={handleEventSaved}
+      {editor.open && (
+        <EventEditorPanel
+          event={editor.event}
+          defaultStartAt={editor.defaultStartAt}
+          onClose={() => setEditor({ open: false })}
+          onSaved={handleEditorSaved}
+          onDeleted={handleEditorDeleted}
         />
       )}
     </div>
