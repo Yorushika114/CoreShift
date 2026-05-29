@@ -59,9 +59,11 @@ export function WeekView({ startDate, events, use24h, onDayClick }: WeekViewProp
   const nowTop = (now.getHours() * 60 + now.getMinutes()) / 30 * SLOT_HEIGHT;
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      {/* Day column headers */}
-      <div className="flex border-b border-gray-200 flex-shrink-0">
+    // scrollRef on the outer container so header sticky works correctly,
+    // and both header + grid share the same scrollbar — no width mismatch.
+    <div ref={scrollRef} className="flex-1 overflow-y-auto">
+      {/* Sticky day column headers inside scroll container */}
+      <div className="sticky top-0 z-20 flex bg-white border-b border-gray-200">
         <div className="w-16 flex-shrink-0" />
         {days.map((day, i) => {
           const today = isToday(day);
@@ -84,9 +86,8 @@ export function WeekView({ startDate, events, use24h, onDayClick }: WeekViewProp
         })}
       </div>
 
-      {/* Scrollable grid */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto">
-        <div className="flex" style={{ height: `${48 * SLOT_HEIGHT}px` }}>
+      {/* Grid content */}
+      <div className="flex" style={{ height: `${48 * SLOT_HEIGHT}px` }}>
           {/* Time labels */}
           <div className="w-16 flex-shrink-0 relative">
             {Array.from({ length: 24 }, (_, hour) => (
@@ -158,6 +159,6 @@ export function WeekView({ startDate, events, use24h, onDayClick }: WeekViewProp
           })}
         </div>
       </div>
-    </div>
   );
 }
+
