@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { parseVoiceCommand } from '@/lib/voice/parseVoiceCommand';
 import { useSpeechRecognition } from '@/lib/voice/useSpeechRecognition';
 import { formatDateCN, formatTimeCN } from '@/lib/calendar/date-utils';
+import { EVENT_COLOR_OPTIONS } from '@/lib/calendar/color-utils';
 import type { CalendarEvent, ParsedCommand } from '@/types';
 
 interface Props {
@@ -100,6 +101,8 @@ export function EventEditorPanel({
     return '';
   });
 
+  const [color, setColor] = useState<string>(event?.color ?? 'blue');
+
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -153,6 +156,7 @@ export function EventEditorPanel({
           reminderAt: parsed.reminderAt ?? null,
           allDay: false,
           recurrence: null,
+          color,
           sourceText: nlpInput.trim(),
         };
       } else {
@@ -191,6 +195,7 @@ export function EventEditorPanel({
           reminderAt: computedReminderAt,
           allDay,
           recurrence: recurrence || null,
+          color,
         };
       }
 
@@ -369,6 +374,26 @@ export function EventEditorPanel({
                 placeholder="事件标题"
                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
               />
+            </div>
+
+            {/* Color picker */}
+            <div>
+              <label className="block text-xs text-gray-500 mb-1.5">颜色</label>
+              <div className="flex gap-2">
+                {EVENT_COLOR_OPTIONS.map(opt => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    title={opt.label}
+                    onClick={() => setColor(opt.id)}
+                    className={`w-6 h-6 rounded-full ${opt.bg} flex-shrink-0 transition-transform ${
+                      color === opt.id
+                        ? 'ring-2 ring-offset-2 ring-gray-400 scale-110'
+                        : 'hover:scale-110'
+                    }`}
+                  />
+                ))}
+              </div>
             </div>
 
             {/* All-day toggle */}

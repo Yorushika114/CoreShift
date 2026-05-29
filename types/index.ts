@@ -7,6 +7,7 @@ export type CalendarEvent = {
   reminderAt?: string | null;
   allDay?: boolean;
   recurrence?: string | null; // null | "weekly"
+  color?: string | null;
   createdAt: string;
   updatedAt: string;
   sourceText?: string | null;

@@ -132,7 +132,7 @@ export function WeekView({
                     <div
                       key={event.id}
                       onClick={e => { e.stopPropagation(); onEventClick?.(event); }}
-                      className={`${colorFor(event.id)} text-white text-xs rounded px-1 py-0.5 mb-0.5 truncate ${onEventClick ? 'cursor-pointer hover:brightness-110' : ''} flex items-center gap-0.5`}
+                      className={`${colorFor(event)} text-white text-xs rounded px-1 py-0.5 mb-0.5 truncate ${onEventClick ? 'cursor-pointer hover:brightness-110' : ''} flex items-center gap-0.5`}
                     >
                       {event.recurrence && <span className="opacity-75 flex-shrink-0">↺</span>}
                       {event.title}
@@ -209,7 +209,7 @@ export function WeekView({
                     key={event.id}
                     data-testid={`week-event-${event.id}`}
                     onClick={e => { e.stopPropagation(); onEventClick?.(event); }}
-                    className={`absolute inset-x-0.5 rounded px-1 py-0.5 ${colorFor(event.id)} text-white overflow-hidden ${onEventClick ? 'cursor-pointer hover:brightness-110' : ''}`}
+                    className={`absolute inset-x-0.5 rounded px-1 py-0.5 ${colorFor(event)} text-white overflow-hidden ${onEventClick ? 'cursor-pointer hover:brightness-110' : ''}`}
                     style={{ top: `${topPx}px`, height: `${heightPx}px` }}
                   >
                     <div className="text-xs font-medium truncate leading-tight flex items-center gap-0.5">
