@@ -33,8 +33,8 @@ const ERROR_MESSAGES: Record<SpeechErrorKind, string> = {
 
 type Result =
   | { kind: 'notfound'; intent: 'delete' | 'modify' }
-  | { kind: 'delete'; events: CalendarEvent[] }
-  | { kind: 'modify-pick'; events: CalendarEvent[]; pick: (e: CalendarEvent) => void }
+  | { kind: 'delete'; events: CalendarEvent[]; approximate?: boolean }
+  | { kind: 'modify-pick'; events: CalendarEvent[]; pick: (e: CalendarEvent) => void; approximate?: boolean }
   | { kind: 'query'; date: Date; events: CalendarEvent[] }
   | { kind: 'create-preview'; parsed: ParsedCommand; original: string };
 
@@ -44,11 +44,12 @@ function dayRange(d: Date): [Date, Date] {
   return [start, end];
 }
 
-// 未说日期时的兜底范围：昨天 ~ 60 天后，按标题匹配
-function fallbackRange(): [Date, Date] {
+// 删除/修改的候选抓取范围：过去 30 天 ~ 未来 90 天。
+// 宽窗口拉全，日期匹配交给 matchEvents 排序/分层，避免"事件不在我说的那天"导致找不到。
+function wideRange(): [Date, Date] {
   const now = new Date();
-  const start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const end = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000);
+  const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const end = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
   return [start, end];
 }
 
@@ -109,9 +110,10 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
     setBusy(true);
     try {
       const targetDate = parsed.hasDate && parsed.startAt ? new Date(parsed.startAt) : new Date();
-      const events = await fetchRange(parsed.hasDate ? dayRange(targetDate) : fallbackRange());
 
       if (parsed.intent === 'query') {
+        // 查询是某一天的事：按目标日（无日期则今天）拉当天
+        const events = await fetchRange(dayRange(targetDate));
         onQuery(targetDate);
         setResult({ kind: 'query', date: targetDate, events });
         const msg = events.length > 0
@@ -121,33 +123,39 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
         return;
       }
 
-      const matches = matchEvents(events, {
+      // delete / modify：拉宽窗口，交给 matchEvents 分层匹配
+      const events = await fetchRange(wideRange());
+      const { results, tier } = matchEvents(events, {
         date: targetDate,
         hasDate: parsed.hasDate,
         title: parsed.title,
       });
 
-      if (matches.length === 0) {
+      if (results.length === 0) {
         setResult({ kind: 'notfound', intent: parsed.intent });
-        void speak('没有找到匹配的事件');
+        void speak('这段时间没有安排');
         return;
       }
 
+      // 只有"当天精确唯一命中"才直接执行；其余一律列候选让用户选/确认
+      const approximate = tier !== 'exact';
+
       if (parsed.intent === 'modify') {
-        if (matches.length === 1) {
-          onModify(applyModify(matches[0], parsed));
+        if (tier === 'exact' && results.length === 1) {
+          onModify(applyModify(results[0], parsed));
           return;
         }
         setResult({
           kind: 'modify-pick',
-          events: matches,
+          events: results,
+          approximate,
           pick: (e) => onModify(applyModify(e, parsed)),
         });
         return;
       }
 
       // delete
-      setResult({ kind: 'delete', events: matches });
+      setResult({ kind: 'delete', events: results, approximate });
     } catch {
       setActionError('处理失败，请重试');
       void speak('处理失败，请重试');
@@ -220,6 +228,9 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
 
             {result.kind === 'delete' && (
               <>
+                {result.approximate && (
+                  <p className="text-xs text-amber-600">没找到精确匹配，以下是相关安排，请确认要删除的：</p>
+                )}
                 <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">确认删除</p>
                 <div className="space-y-2">
                   {result.events.map((e) => (
@@ -240,6 +251,9 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
 
             {result.kind === 'modify-pick' && (
               <>
+                {result.approximate && (
+                  <p className="text-xs text-amber-600">没找到精确匹配，以下是相关安排：</p>
+                )}
                 <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">选择要修改的事件</p>
                 <div className="space-y-2">
                   {result.events.map((e) => (

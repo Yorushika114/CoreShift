@@ -16,69 +16,85 @@ function ev(id: string, title: string, month: number, day: number, hour: number)
   };
 }
 
-// 2026-05-30 三条，2026-05-31 一条（月份 0-based：4 = 5月）
 const EVENTS: CalendarEvent[] = [
-  ev('1', '组会', 4, 30, 15),
-  ev('2', '算法课', 4, 30, 9),
-  ev('3', '组会复盘', 4, 30, 18),
-  ev('4', '组会', 4, 31, 15),
+  ev('1', '组会', 4, 30, 15),     // 5-30
+  ev('2', '算法课', 4, 30, 9),     // 5-30
+  ev('3', '组会复盘', 4, 30, 18),  // 5-30
+  ev('4', '周会', 5, 2, 15),       // 6-02
+  ev('6', '组会', 5, 5, 15),       // 6-05（较远）
 ];
 
 const MAY30 = new Date(2026, 4, 30);
 
-describe('matchEvents 日期过滤', () => {
-  it('hasDate 时只保留当天事件', () => {
-    const r = matchEvents(EVENTS, { date: MAY30, hasDate: true });
-    expect(r.map((e) => e.id).sort()).toEqual(['1', '2', '3']);
-  });
-
-  it('hasDate 为 false 时不按日期过滤', () => {
-    const r = matchEvents(EVENTS, { date: MAY30, hasDate: false, title: '组会' });
-    // 跨两天的"组会"都应命中（含模糊"组会复盘"）
-    expect(r.map((e) => e.id).sort()).toEqual(['1', '3', '4']);
-  });
-});
-
-describe('matchEvents 标题模糊', () => {
-  it('单条命中：日期 + 唯一标题', () => {
-    const r = matchEvents(EVENTS, { date: MAY30, hasDate: true, title: '算法课' });
-    expect(r).toHaveLength(1);
-    expect(r[0].id).toBe('2');
-  });
-
-  it('多条命中：标题子串匹配多个', () => {
+describe('matchEvents 分层（exact / fuzzy / all / none）', () => {
+  it('exact：说了日期 + 当天标题子串命中', () => {
     const r = matchEvents(EVENTS, { date: MAY30, hasDate: true, title: '组会' });
-    // "组会" 命中 "组会" 与 "组会复盘"
-    expect(r.map((e) => e.id).sort()).toEqual(['1', '3']);
+    expect(r.tier).toBe('exact');
+    // 仅当天（5-30）的 组会 / 组会复盘；6-05 的组会不算 exact
+    expect(r.results.map((e) => e.id).sort()).toEqual(['1', '3']);
   });
 
-  it('双向匹配："开组会" 命中标题 "组会"（标题是关键词的子串）', () => {
-    const r = matchEvents(EVENTS, { date: MAY30, hasDate: true, title: '开组会' });
-    // "组会" 是 "开组会" 的子串 → 命中 id 1；"组会复盘" 与 "开组会" 互不包含 → 不命中
-    expect(r.map((e) => e.id).sort()).toEqual(['1']);
+  it('exact 唯一命中', () => {
+    const r = matchEvents(EVENTS, { date: MAY30, hasDate: true, title: '算法课' });
+    expect(r.tier).toBe('exact');
+    expect(r.results.map((e) => e.id)).toEqual(['2']);
   });
 
-  it('零条命中：标题无匹配', () => {
-    const r = matchEvents(EVENTS, { date: MAY30, hasDate: true, title: '健身' });
-    expect(r).toHaveLength(0);
+  it('fuzzy：当天无子串 → 全窗口字符重叠/子串（周会↔组会）', () => {
+    const r = matchEvents(EVENTS, { date: MAY30, hasDate: true, title: '周会' });
+    expect(r.tier).toBe('fuzzy');
+    const ids = r.results.map((e) => e.id);
+    expect(ids).toContain('4'); // 周会 精确子串
+    expect(ids).toContain('1'); // 组会 字符重叠 Dice=0.5
   });
 
-  it('单字事件标题不被关键词反向误匹配', () => {
-    const evs: CalendarEvent[] = [ev('a', '会', 4, 30, 10), ev('b', '组会复盘', 4, 30, 11)];
-    const r = matchEvents(evs, { date: MAY30, hasDate: true, title: '组会' });
-    // "组会" 不应反向命中单字 "会"，只命中 "组会复盘"
-    expect(r.map((e) => e.id)).toEqual(['b']);
+  it('没说日期：即使子串唯一命中也只算 fuzzy（不触发自动执行）', () => {
+    const r = matchEvents(EVENTS, { hasDate: false, title: '算法课' });
+    expect(r.tier).toBe('fuzzy');
+    expect(r.results.map((e) => e.id)).toContain('2');
+  });
+
+  it('all：标题完全不沾 → 兜底列出候选（不再返回空）', () => {
+    const r = matchEvents(EVENTS, { date: MAY30, hasDate: true, title: '钓鱼' });
+    expect(r.tier).toBe('all');
+    expect(r.results.length).toBeGreaterThan(0);
+  });
+
+  it('无标题 + 有日期：列当天候选', () => {
+    const r = matchEvents(EVENTS, { date: MAY30, hasDate: true });
+    expect(r.tier).toBe('all');
+    expect(r.results.map((e) => e.id).sort()).toEqual(['1', '2', '3']);
+  });
+
+  it('none：窗口内零事件', () => {
+    const r = matchEvents([], { date: MAY30, hasDate: true, title: '组会' });
+    expect(r.tier).toBe('none');
+    expect(r.results).toEqual([]);
   });
 });
 
-describe('matchEvents 边界', () => {
-  it('无标题关键词时返回当天全部（供用户挑选）', () => {
-    const r = matchEvents(EVENTS, { date: MAY30, hasDate: true });
-    expect(r).toHaveLength(3);
+describe('matchEvents 排序与上限', () => {
+  it('结果按与目标日期临近排序（当天优先于较远）', () => {
+    // hasDate=false 不进 exact，date 仅作排序参照
+    const r = matchEvents(EVENTS, { date: MAY30, hasDate: false, title: '组会' });
+    const ids = r.results.map((e) => e.id);
+    // 5-30 的 id1 应排在 6-05 的 id6 前面
+    expect(ids.indexOf('1')).toBeLessThan(ids.indexOf('6'));
   });
 
-  it('空标题字符串视为无关键词', () => {
-    const r = matchEvents(EVENTS, { date: MAY30, hasDate: true, title: '   ' });
-    expect(r).toHaveLength(3);
+  it('兜底候选最多 8 条', () => {
+    const many = Array.from({ length: 20 }, (_, i) => ev('m' + i, '随便' + i, 4, 30, i % 24));
+    const r = matchEvents(many, { date: MAY30, hasDate: true, title: '钓鱼' });
+    expect(r.results.length).toBeLessThanOrEqual(8);
+  });
+});
+
+describe('matchEvents exact 仍保留单字 guard（避免误自动执行）', () => {
+  it('exact 子串反向匹配要求标题≥2字', () => {
+    const evs = [ev('a', '会', 4, 30, 10), ev('b', '组会复盘', 4, 30, 11)];
+    const r = matchEvents(evs, { date: MAY30, hasDate: true, title: '组会' });
+    // 单字"会"不应作为 exact 子串命中；"组会复盘" 命中
+    expect(r.tier).toBe('exact');
+    expect(r.results.map((e) => e.id)).toEqual(['b']);
   });
 });
