@@ -96,7 +96,7 @@ export function WeekView({
       {/* Sticky header: day names + optional all-day row */}
       <div className="sticky top-0 z-20 bg-white border-b border-gray-200">
         <div className="flex">
-          <div className="w-16 flex-shrink-0" />
+          <div className="w-20 flex-shrink-0" />
           {days.map((day, i) => {
             const today = isToday(day);
             return (
@@ -123,7 +123,7 @@ export function WeekView({
         {/* All-day row */}
         {hasAllDay && (
           <div className="flex border-t border-gray-100">
-            <div className="w-16 flex-shrink-0 text-xs text-gray-400 flex items-center justify-end pr-2 py-1">
+            <div className="w-20 flex-shrink-0 text-xs text-gray-400 flex items-center justify-end pr-2 py-1">
               全天
             </div>
             {days.map((day, i) => {
@@ -151,14 +151,14 @@ export function WeekView({
       {/* Grid content */}
       <div className="flex" style={{ height: `${48 * SLOT_HEIGHT}px` }}>
         {/* Time labels */}
-        <div className="w-16 flex-shrink-0 relative">
+        <div className="w-20 flex-shrink-0 relative">
           {Array.from({ length: 24 }, (_, hour) => (
             <div
               key={hour}
               className="absolute w-full flex items-start justify-end pr-2 pt-1"
               style={{ top: `${hour * 2 * SLOT_HEIGHT}px`, height: `${SLOT_HEIGHT}px` }}
             >
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-gray-400 whitespace-nowrap">
                 {formatTimeSlot(hour, 0, use24h)}
               </span>
             </div>

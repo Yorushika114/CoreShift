@@ -64,7 +64,7 @@ export function DayView({ date, events, use24h, focusTime, onSlotClick, onEventC
       {/* All-day strip */}
       {allDayEvents.length > 0 && (
         <div className="flex-shrink-0 flex border-b border-gray-200 bg-gray-50">
-          <div className="w-16 flex-shrink-0 text-xs text-gray-400 flex items-center justify-end pr-2 py-1">
+          <div className="w-20 flex-shrink-0 text-xs text-gray-400 flex items-center justify-end pr-2 py-1">
             全天
           </div>
           <div className="flex-1 border-l border-gray-200 p-1 flex flex-col gap-0.5">
@@ -100,9 +100,9 @@ export function DayView({ date, events, use24h, focusTime, onSlotClick, onEventC
                 className="absolute w-full flex border-b border-gray-100"
                 style={{ top: `${i * SLOT_HEIGHT}px`, height: `${SLOT_HEIGHT}px` }}
               >
-                <div className="w-16 flex-shrink-0 flex items-start justify-end pr-3 pt-1">
+                <div className="w-20 flex-shrink-0 flex items-start justify-end pr-3 pt-1">
                   {minute === 0 && (
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-gray-400 whitespace-nowrap">
                       {formatTimeSlot(hour, 0, use24h)}
                     </span>
                   )}
@@ -115,7 +115,7 @@ export function DayView({ date, events, use24h, focusTime, onSlotClick, onEventC
           {/* Current time line */}
           {showNowLine && (
             <div
-              className="absolute left-16 right-0 z-10 pointer-events-none"
+              className="absolute left-20 right-0 z-10 pointer-events-none"
               style={{ top: `${nowTop}px` }}
               data-testid="now-line"
             >
@@ -141,7 +141,7 @@ export function DayView({ date, events, use24h, focusTime, onSlotClick, onEventC
                 key={event.id}
                 data-testid={`event-block-${event.id}`}
                 onClick={e => { e.stopPropagation(); onEventClick?.(event); }}
-                className={`absolute left-16 right-2 rounded-md px-2 py-1 ${colorFor(event)} text-white overflow-hidden ${onEventClick ? 'cursor-pointer hover:brightness-110' : ''}`}
+                className={`absolute left-20 right-2 rounded-md px-2 py-1 ${colorFor(event)} text-white overflow-hidden ${onEventClick ? 'cursor-pointer hover:brightness-110' : ''}`}
                 style={{ top: `${topPx}px`, height: `${heightPx}px` }}
               >
                 <div className="text-xs font-medium truncate leading-tight flex items-center gap-1">
