@@ -12,15 +12,19 @@ interface EventCardProps {
 export function EventCard({ event, compact = false, onClick }: EventCardProps) {
   const color = colorFor(event.id);
   const time = formatTimeCN(new Date(event.startAt));
+  const label = event.allDay
+    ? event.title
+    : `${time} ${event.title}`;
 
   if (compact) {
     return (
       <div
         onClick={e => { e.stopPropagation(); onClick?.(); }}
-        className={`${color} text-white text-xs rounded px-1 py-0.5 truncate cursor-pointer`}
-        title={`${time} ${event.title}`}
+        className={`${color} text-white text-xs rounded px-1 py-0.5 truncate cursor-pointer flex items-center gap-0.5`}
+        title={label}
       >
-        {time} {event.title}
+        {event.recurrence && <span className="opacity-75 flex-shrink-0">↺</span>}
+        {label}
       </div>
     );
   }
@@ -30,8 +34,12 @@ export function EventCard({ event, compact = false, onClick }: EventCardProps) {
       onClick={onClick}
       className={`${color} text-white rounded-lg p-3 cursor-pointer hover:opacity-90 transition-opacity`}
     >
-      <div className="font-medium text-sm">{event.title}</div>
-      <div className="text-xs opacity-90 mt-0.5">{time}</div>
+      <div className="font-medium text-sm flex items-center gap-1">
+        {event.recurrence && <span className="opacity-75">↺</span>}
+        {event.title}
+      </div>
+      {!event.allDay && <div className="text-xs opacity-90 mt-0.5">{time}</div>}
+      {event.allDay && <div className="text-xs opacity-90 mt-0.5">全天</div>}
       {event.reminderAt && (
         <div className="text-xs opacity-75 mt-1">🔔 提醒已设置</div>
       )}
