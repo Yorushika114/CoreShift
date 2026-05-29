@@ -57,7 +57,7 @@ function YearPanel({ year, eventDates, isCenter, onMonthClick, onReachBottom, on
   }, [isCenter, onReachBottom, onReachTop]);
 
   return (
-    <div ref={ref} style={{ height: 'calc(100% / 3)', overflowY: 'auto' }}>
+    <div ref={ref} data-testid={`year-panel-${year}`} style={{ height: 'calc(100% / 3)', overflowY: 'auto' }}>
       <div className="grid grid-cols-3 gap-4 p-6">
         {Array.from({ length: 12 }, (_, monthIndex) => {
           const days = getCalendarDays(year, monthIndex);
