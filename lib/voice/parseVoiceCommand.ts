@@ -8,6 +8,10 @@ const TIME_PATTERNS = [
   /(下下个?月|下个?月|这个?月|本月)(\d{1,2}|[一二三四五六七八九十]+)[日号]/,
   /(\d{1,2}|[一二三四五六七八九十]+)月(\d{1,2}|[一二三四五六七八九十]+)[日号]/,
   /(\d+|[一二三四五六七八九十]+)天[后後]/,
+  // 相对时间偏移：半小时后 / N(个)小时后 / N分钟后
+  /半个?(?:小时|钟头)[后後]/,
+  /(\d+|[一二三四五六七八九十两]+)个?(?:小时|钟头)[后後]/,
+  /(\d+|[一二三四五六七八九十两]+)分钟?[后後]/,
   /大后天|今天|今日|明天|明日|后天/,
   /凌晨|早上|上午|中午|下午|傍晚|晚上|夜晚?|晚/,
   /到(\d{1,2}|[一二三四五六七八九十两]+)[点時时]/,
@@ -26,8 +30,10 @@ function stripTimePhrases(text: string): string {
 
 function detectIntent(text: string): ParsedCommand['intent'] {
   if (/删除|取消|移除|remove|delete/.test(text)) return 'delete';
-  if (/查看|查询|有什么|有哪些|安排|日程|看看/.test(text)) return 'query';
-  if (/修改|改|更新|推迟|提前|延期/.test(text)) return 'modify';
+  // 查询：用明确的查询词，不含裸"安排"（"安排"在创建指令里太常见，如"安排明天开会"）
+  if (/查看|查询|有什么|有哪些|日程|看看/.test(text)) return 'query';
+  // 修改：用"改到/改成/改为/改期"等动补结构，不含裸"改"（避免"改稿"这类标题误判）
+  if (/修改|改到|改成|改为|改期|推迟|提前|延期/.test(text)) return 'modify';
   if (/添加|新建|创建|加|安排|提醒|开会|会议|约|记/.test(text)) return 'create';
   return 'create'; // 默认尝试创建
 }
@@ -66,6 +72,8 @@ export function parseVoiceCommand(
     title: title || undefined,
     startAt,
     endAt,
+    hasDate,
+    hasTime,
     ambiguities,
     clarificationNeeded: !title,
     clarificationQuestion: !title ? '请问这个事件的标题是什么？' : undefined,
