@@ -5,12 +5,20 @@ import { useState, useEffect, useCallback } from 'react';
 import { MiniCalendar } from '@/components/calendar/MiniCalendar';
 import { MonthGrid } from '@/components/calendar/MonthGrid';
 import { YearGrid } from '@/components/calendar/YearGrid';
+import { WeekView } from '@/components/calendar/WeekView';
 import { DayView } from '@/components/calendar/DayView';
 import { AddEventModal } from '@/components/voice/AddEventModal';
-import { formatMonthYear, formatDayTitle } from '@/lib/calendar/date-utils';
+import { formatMonthYear, formatDayTitle, getWeekStart } from '@/lib/calendar/date-utils';
 import type { CalendarEvent } from '@/types';
 
-type ViewMode = 'year' | 'month' | 'day';
+type ViewMode = 'year' | 'month' | 'week' | 'day';
+
+const VIEW_TABS: { label: string; value: ViewMode }[] = [
+  { label: '年', value: 'year' },
+  { label: '月', value: 'month' },
+  { label: '周', value: 'week' },
+  { label: '日', value: 'day' },
+];
 
 export default function CalendarPage() {
   const [view, setView] = useState<ViewMode>('month');
@@ -35,6 +43,10 @@ export default function CalendarPage() {
       } else if (currentView === 'month') {
         start = new Date(date.getFullYear(), date.getMonth(), 1);
         end = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59);
+      } else if (currentView === 'week') {
+        const ws = getWeekStart(date);
+        start = ws;
+        end = new Date(ws.getTime() + 7 * 24 * 60 * 60 * 1000 - 1);
       } else {
         start = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
         end = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
@@ -57,11 +69,6 @@ export default function CalendarPage() {
     localStorage.setItem('use24h', String(value));
   }
 
-  function goBack() {
-    if (view === 'day') setView('month');
-    else if (view === 'month') setView('year');
-  }
-
   function goToToday() {
     const today = new Date();
     setSelectedDate(today);
@@ -81,6 +88,8 @@ export default function CalendarPage() {
       setViewDate(d => new Date(d.getFullYear() - 1, d.getMonth(), 1));
     else if (view === 'month')
       setViewDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1));
+    else if (view === 'week')
+      setViewDate(d => new Date(d.getTime() - 7 * 24 * 60 * 60 * 1000));
     else
       setViewDate(d => new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1));
   }
@@ -90,6 +99,8 @@ export default function CalendarPage() {
       setViewDate(d => new Date(d.getFullYear() + 1, d.getMonth(), 1));
     else if (view === 'month')
       setViewDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1));
+    else if (view === 'week')
+      setViewDate(d => new Date(d.getTime() + 7 * 24 * 60 * 60 * 1000));
     else
       setViewDate(d => new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1));
   }
@@ -108,11 +119,18 @@ export default function CalendarPage() {
   function getNavTitle(): string {
     if (view === 'year') return `${viewDate.getFullYear()}年`;
     if (view === 'month') return formatMonthYear(viewDate);
+    if (view === 'week') {
+      const ws = getWeekStart(viewDate);
+      const we = new Date(ws.getTime() + 6 * 24 * 60 * 60 * 1000);
+      const sameMonth = ws.getMonth() === we.getMonth();
+      if (sameMonth) return `${ws.getMonth() + 1}月${ws.getDate()}日 - ${we.getDate()}日`;
+      return `${ws.getMonth() + 1}月${ws.getDate()}日 - ${we.getMonth() + 1}月${we.getDate()}日`;
+    }
     return formatDayTitle(viewDate);
   }
 
-  const prevLabel = view === 'year' ? '上一年' : view === 'month' ? '上个月' : '前一天';
-  const nextLabel = view === 'year' ? '下一年' : view === 'month' ? '下个月' : '后一天';
+  const prevLabel = view === 'year' ? '上一年' : view === 'month' ? '上个月' : view === 'week' ? '上一周' : '前一天';
+  const nextLabel = view === 'year' ? '下一年' : view === 'month' ? '下个月' : view === 'week' ? '下一周' : '后一天';
 
   return (
     <div className="flex h-screen bg-white font-sans">
@@ -122,15 +140,6 @@ export default function CalendarPage() {
           <span className="text-2xl">🗓</span>
           <span className="text-lg font-medium text-gray-700">CoreShift</span>
         </div>
-
-        {view !== 'year' && (
-          <button
-            onClick={goBack}
-            className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 w-fit"
-          >
-            ← 返回
-          </button>
-        )}
 
         <div className="flex items-center gap-2">
           <button
@@ -158,16 +167,13 @@ export default function CalendarPage() {
         />
 
         <div className="mt-auto flex flex-col gap-3">
-          {/* Time format toggle */}
           <div className="border border-gray-200 rounded-lg p-3">
             <div className="text-xs text-gray-500 mb-2">🕐 时间格式</div>
             <div className="flex gap-2">
               <button
                 onClick={() => handleUse24hChange(false)}
                 className={`flex-1 text-xs py-1 rounded transition-colors ${
-                  !use24h
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  !use24h ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
                 12小时
@@ -175,9 +181,7 @@ export default function CalendarPage() {
               <button
                 onClick={() => handleUse24hChange(true)}
                 className={`flex-1 text-xs py-1 rounded transition-colors ${
-                  use24h
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  use24h ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
                 24小时
@@ -208,12 +212,29 @@ export default function CalendarPage() {
           >
             ›
           </button>
-          <h2 className="text-base font-normal text-gray-700 ml-1">
+          <h2 className="text-base font-normal text-gray-700 ml-1 flex-1">
             {getNavTitle()}
           </h2>
           {loading && (
-            <span className="ml-auto text-xs text-gray-400 animate-pulse">加载中…</span>
+            <span className="text-xs text-gray-400 animate-pulse">加载中…</span>
           )}
+
+          {/* View tabs */}
+          <div className="flex border border-gray-200 rounded-lg overflow-hidden">
+            {VIEW_TABS.map(tab => (
+              <button
+                key={tab.value}
+                onClick={() => setView(tab.value)}
+                className={`px-3 py-1 text-sm transition-colors ${
+                  view === tab.value
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {view === 'year' && (
@@ -228,6 +249,14 @@ export default function CalendarPage() {
             viewDate={viewDate}
             events={events}
             onDateClick={handleDayClick}
+          />
+        )}
+        {view === 'week' && (
+          <WeekView
+            startDate={getWeekStart(viewDate)}
+            events={events}
+            use24h={use24h}
+            onDayClick={handleDayClick}
           />
         )}
         {view === 'day' && (
