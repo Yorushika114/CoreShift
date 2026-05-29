@@ -81,8 +81,7 @@ export function WeekView({
   function handleColumnClick(e: React.MouseEvent<HTMLDivElement>, day: Date) {
     if (!onSlotClick) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    const scrollTop = scrollRef.current?.scrollTop ?? 0;
-    const y = e.clientY - rect.top + scrollTop;
+    const y = e.clientY - rect.top;
     const slotIndex = Math.floor(y / SLOT_HEIGHT);
     const hour = Math.min(Math.floor(slotIndex / 2), 23);
     const minute = (slotIndex % 2) * 30;
