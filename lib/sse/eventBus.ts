@@ -10,7 +10,7 @@ export const eventBus = {
   },
   broadcast(type: string) {
     const msg = encoder.encode(`data: ${type}\n\n`);
-    for (const ctrl of [...clients]) {
+    for (const ctrl of Array.from(clients)) {
       try {
         ctrl.enqueue(msg);
       } catch {

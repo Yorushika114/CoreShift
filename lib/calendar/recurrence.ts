@@ -24,6 +24,10 @@ export function expandEvents(
       const duration = originalEnd
         ? originalEnd.getTime() - originalStart.getTime()
         : 60 * 60 * 1000;
+      // Preserve the reminder offset (ms before start) so each instance gets the right reminderAt
+      const reminderOffset = event.reminderAt
+        ? originalStart.getTime() - new Date(event.reminderAt).getTime()
+        : null;
 
       // Find first instance >= rangeStart
       let instanceStart = new Date(originalStart);
@@ -41,6 +45,9 @@ export function expandEvents(
           id: virtualId,
           startAt: instanceStart.toISOString(),
           endAt: new Date(instanceStart.getTime() + duration).toISOString(),
+          reminderAt: reminderOffset !== null
+            ? new Date(instanceStart.getTime() - reminderOffset).toISOString()
+            : event.reminderAt,
         });
         instanceStart = new Date(instanceStart.getTime() + stepMs);
       }

@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  * 调用方据此降级为文字输入（CLAUDE.md 要求的文字兜底）。
  */
 
-export type SpeechErrorKind = 'unsupported' | 'not-allowed' | 'no-speech' | 'network' | 'aborted' | 'unknown';
+export type SpeechErrorKind = 'unsupported' | 'not-allowed' | 'no-speech' | 'network' | 'aborted' | 'audio-capture' | 'unknown';
 
 export interface UseSpeechRecognitionOptions {
   lang?: string;
@@ -40,6 +40,8 @@ function mapError(code: string): SpeechErrorKind {
       return 'network';
     case 'aborted':
       return 'aborted';
+    case 'audio-capture':
+      return 'audio-capture';
     default:
       return 'unknown';
   }
