@@ -8,6 +8,8 @@ function toCalendarEvent(e: {
   startAt: Date;
   endAt: Date | null;
   reminderAt: Date | null;
+  allDay: boolean;
+  recurrence: string | null;
   createdAt: Date;
   updatedAt: Date;
   sourceText: string | null;
@@ -18,6 +20,8 @@ function toCalendarEvent(e: {
     startAt: e.startAt.toISOString(),
     endAt: e.endAt?.toISOString() ?? null,
     reminderAt: e.reminderAt?.toISOString() ?? null,
+    allDay: e.allDay,
+    recurrence: e.recurrence ?? null,
     createdAt: e.createdAt.toISOString(),
     updatedAt: e.updatedAt.toISOString(),
     sourceText: e.sourceText ?? null,
@@ -25,18 +29,29 @@ function toCalendarEvent(e: {
 }
 
 export async function getEvents(startDate?: Date, endDate?: Date): Promise<CalendarEvent[]> {
-  const events = await prisma.event.findMany({
-    where: startDate || endDate
-      ? { startAt: { gte: startDate, lte: endDate } }
-      : undefined,
-    orderBy: { startAt: 'asc' },
-  });
-  return events.map(toCalendarEvent);
+  if (!startDate && !endDate) {
+    const events = await prisma.event.findMany({ orderBy: { startAt: 'asc' } });
+    return events.map(toCalendarEvent);
+  }
+
+  // Non-recurring events filtered by date range + ALL recurring events (expanded client-side)
+  const [rangeEvents, recurringEvents] = await Promise.all([
+    prisma.event.findMany({
+      where: { recurrence: null, startAt: { gte: startDate, lte: endDate } },
+      orderBy: { startAt: 'asc' },
+    }),
+    prisma.event.findMany({
+      where: { recurrence: { not: null } },
+      orderBy: { startAt: 'asc' },
+    }),
+  ]);
+
+  return [...rangeEvents, ...recurringEvents].map(toCalendarEvent);
 }
 
 export async function createEvent(
   data: Pick<CalendarEvent, 'title' | 'startAt'> &
-    Partial<Pick<CalendarEvent, 'endAt' | 'reminderAt' | 'sourceText'>>
+    Partial<Pick<CalendarEvent, 'endAt' | 'reminderAt' | 'allDay' | 'recurrence' | 'sourceText'>>
 ): Promise<CalendarEvent> {
   const event = await prisma.event.create({
     data: {
@@ -44,6 +59,8 @@ export async function createEvent(
       startAt: new Date(data.startAt),
       endAt: data.endAt ? new Date(data.endAt) : null,
       reminderAt: data.reminderAt ? new Date(data.reminderAt) : null,
+      allDay: data.allDay ?? false,
+      recurrence: data.recurrence ?? null,
       sourceText: data.sourceText ?? null,
     },
   });
@@ -52,7 +69,7 @@ export async function createEvent(
 
 export async function updateEvent(
   id: string,
-  data: Partial<Pick<CalendarEvent, 'title' | 'startAt' | 'endAt' | 'reminderAt' | 'sourceText'>>
+  data: Partial<Pick<CalendarEvent, 'title' | 'startAt' | 'endAt' | 'reminderAt' | 'allDay' | 'recurrence' | 'sourceText'>>
 ): Promise<CalendarEvent> {
   const event = await prisma.event.update({
     where: { id },
@@ -61,6 +78,8 @@ export async function updateEvent(
       ...(data.startAt !== undefined && { startAt: new Date(data.startAt) }),
       ...(data.endAt !== undefined && { endAt: data.endAt ? new Date(data.endAt) : null }),
       ...(data.reminderAt !== undefined && { reminderAt: data.reminderAt ? new Date(data.reminderAt) : null }),
+      ...(data.allDay !== undefined && { allDay: data.allDay }),
+      ...(data.recurrence !== undefined && { recurrence: data.recurrence ?? null }),
       ...(data.sourceText !== undefined && { sourceText: data.sourceText }),
     },
   });

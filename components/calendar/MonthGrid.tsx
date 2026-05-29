@@ -60,7 +60,11 @@ export function MonthGrid({ viewDate, events, onDateClick }: MonthGridProps) {
           const inMonth = day.getMonth() === viewDate.getMonth();
           const today = isToday(day);
           const dateKey = toISODateString(day);
-          const dayEvents = eventsByDate.get(dateKey) ?? [];
+          const dayEvents = (eventsByDate.get(dateKey) ?? []).sort((a, b) => {
+            if (a.allDay && !b.allDay) return -1;
+            if (!a.allDay && b.allDay) return 1;
+            return new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
+          });
 
           return (
             <div

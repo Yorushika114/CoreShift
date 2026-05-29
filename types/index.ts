@@ -5,6 +5,8 @@ export type CalendarEvent = {
   startAt: string;       // ISO 8601
   endAt?: string | null;
   reminderAt?: string | null;
+  allDay?: boolean;
+  recurrence?: string | null; // null | "weekly"
   createdAt: string;
   updatedAt: string;
   sourceText?: string | null;

@@ -1,7 +1,7 @@
 // app/page.tsx
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { MiniCalendar } from '@/components/calendar/MiniCalendar';
 import { MonthGrid } from '@/components/calendar/MonthGrid';
 import { YearGrid } from '@/components/calendar/YearGrid';
@@ -9,7 +9,9 @@ import { WeekView } from '@/components/calendar/WeekView';
 import { DayView } from '@/components/calendar/DayView';
 import { EventEditorPanel } from '@/components/voice/EventEditorPanel';
 import { VoiceCommandOverlay } from '@/components/voice/VoiceCommandOverlay';
+import { reminderService } from '@/lib/reminder/reminderService';
 import { formatMonthYear, formatDayTitle, getWeekStart } from '@/lib/calendar/date-utils';
+import { expandEvents, realEventId } from '@/lib/calendar/recurrence';
 import type { CalendarEvent } from '@/types';
 
 type ViewMode = 'year' | 'month' | 'week' | 'day';
@@ -70,8 +72,36 @@ export default function CalendarPage() {
   }, []);
 
   useEffect(() => {
+    reminderService.requestPermission();
+  }, []);
+
+  useEffect(() => {
     fetchEvents(viewDate, view);
   }, [viewDate, view, fetchEvents]);
+
+  useEffect(() => {
+    reminderService.scheduleAll(events);
+  }, [events]);
+
+  // Expand weekly recurring events for the current view range
+  const expandedEvents = useMemo(() => {
+    let start: Date, end: Date;
+    if (view === 'year') {
+      start = new Date(viewDate.getFullYear(), 0, 1);
+      end = new Date(viewDate.getFullYear(), 11, 31, 23, 59, 59);
+    } else if (view === 'month') {
+      start = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
+      end = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0, 23, 59, 59);
+    } else if (view === 'week') {
+      const ws = getWeekStart(viewDate);
+      start = ws;
+      end = new Date(ws.getTime() + 7 * 24 * 60 * 60 * 1000 - 1);
+    } else {
+      start = new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate(), 0, 0, 0);
+      end = new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate(), 23, 59, 59);
+    }
+    return expandEvents(events, start, end);
+  }, [events, view, viewDate]);
 
   function handleUse24hChange(value: boolean) {
     setUse24h(value);
@@ -123,7 +153,10 @@ export default function CalendarPage() {
   }
 
   function openEditEditor(event: CalendarEvent) {
-    setEditor({ open: true, event });
+    // Recurring instances have a virtual ID like "realId::isoDate"; resolve to the base event
+    const originalId = realEventId(event.id);
+    const original = events.find(e => e.id === originalId) ?? event;
+    setEditor({ open: true, event: original });
   }
 
   // 语音/文字指令 → PR1 暂统一走创建，预填进编辑面板由用户确认
@@ -133,8 +166,10 @@ export default function CalendarPage() {
   }
 
   function handleEditorSaved(saved: CalendarEvent) {
+    const eventDate = new Date(saved.startAt);
     setEditor({ open: false });
-    fetchEvents(viewDate, view);
+    setViewDate(eventDate);
+    fetchEvents(eventDate, view);
   }
 
   function handleEditorDeleted() {
@@ -270,21 +305,21 @@ export default function CalendarPage() {
         {view === 'year' && (
           <YearGrid
             year={viewDate.getFullYear()}
-            events={events}
+            events={expandedEvents}
             onMonthClick={handleMonthClick}
           />
         )}
         {view === 'month' && (
           <MonthGrid
             viewDate={viewDate}
-            events={events}
+            events={expandedEvents}
             onDateClick={handleDayClick}
           />
         )}
         {view === 'week' && (
           <WeekView
             startDate={getWeekStart(viewDate)}
-            events={events}
+            events={expandedEvents}
             use24h={use24h}
             onDayClick={handleDayClick}
             onSlotClick={openCreateEditor}
@@ -294,7 +329,7 @@ export default function CalendarPage() {
         {view === 'day' && (
           <DayView
             date={viewDate}
-            events={events}
+            events={expandedEvents}
             use24h={use24h}
             onSlotClick={openCreateEditor}
             onEventClick={openEditEditor}
