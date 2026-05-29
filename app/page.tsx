@@ -38,6 +38,7 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(true);
   const [editor, setEditor] = useState<EditorState>({ open: false });
   const [voiceOpen, setVoiceOpen] = useState(false);
+  const [reminderToasts, setReminderToasts] = useState<{ id: string; title: string; timeStr: string }[]>([]);
   const [use24h, setUse24h] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
     const saved = localStorage.getItem('use24h');
@@ -73,11 +74,23 @@ export default function CalendarPage() {
 
   useEffect(() => {
     reminderService.requestPermission();
+    return reminderService.onFire((event) => {
+      const timeStr = new Date(event.startAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+      const toast = { id: event.id + Date.now(), title: event.title, timeStr };
+      setReminderToasts(prev => [...prev, toast]);
+      setTimeout(() => setReminderToasts(prev => prev.filter(t => t.id !== toast.id)), 8000);
+    });
   }, []);
 
   useEffect(() => {
     fetchEvents(viewDate, view);
   }, [viewDate, view, fetchEvents]);
+
+  useEffect(() => {
+    const es = new EventSource('/api/events/stream');
+    es.onmessage = () => fetchEvents(viewDate, view);
+    return () => es.close();
+  }, [fetchEvents, viewDate, view]);
 
   useEffect(() => {
     reminderService.scheduleAll(events);
@@ -257,6 +270,7 @@ export default function CalendarPage() {
             <span className="text-base">🎙</span>
             语音输入
           </button>
+
         </div>
       </aside>
 
@@ -354,6 +368,26 @@ export default function CalendarPage() {
           onClose={() => setVoiceOpen(false)}
         />
       )}
+
+      {/* Reminder toasts */}
+      <div className="fixed bottom-6 right-6 flex flex-col gap-2 z-[100]">
+        {reminderToasts.map(t => (
+          <div
+            key={t.id}
+            className="flex items-start gap-3 bg-white border border-blue-200 shadow-lg rounded-xl px-4 py-3 w-72 animate-fade-in"
+          >
+            <span className="text-xl">🔔</span>
+            <div>
+              <p className="text-sm font-medium text-gray-800">{t.title}</p>
+              <p className="text-xs text-gray-500 mt-0.5">活动将于 {t.timeStr} 开始</p>
+            </div>
+            <button
+              onClick={() => setReminderToasts(prev => prev.filter(x => x.id !== t.id))}
+              className="ml-auto text-gray-400 hover:text-gray-600 text-lg leading-none flex-shrink-0"
+            >×</button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

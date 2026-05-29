@@ -1,6 +1,7 @@
 // app/api/events/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getEvents, createEvent } from '@/lib/calendar/events';
+import { eventBus } from '@/lib/sse/eventBus';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -24,6 +25,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'title and startAt are required' }, { status: 400 });
     }
     const event = await createEvent(body);
+    eventBus.broadcast('created');
     return NextResponse.json(event, { status: 201 });
   } catch (e) {
     return NextResponse.json({ error: 'Failed to create event' }, { status: 500 });
