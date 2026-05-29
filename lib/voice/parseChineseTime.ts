@@ -159,6 +159,29 @@ export type ParsedTime = {
   hasTime: boolean;
 };
 
+/** 从文本中提取提醒偏移分钟数，返回 null 表示没有提醒意图 */
+export function extractReminderOffset(text: string): number | null {
+  // 提前X分钟
+  const minMatch = text.match(/提前(\d+|[一二三四五六七八九十百]+)分钟/);
+  if (minMatch) return chineseNumToInt(minMatch[1]);
+
+  // X分钟前提醒
+  const minBeforeMatch = text.match(/(\d+|[一二三四五六七八九十]+)分钟前/);
+  if (minBeforeMatch) return chineseNumToInt(minBeforeMatch[1]);
+
+  // 提前半小时
+  if (/提前半小时/.test(text)) return 30;
+
+  // 提前X小时
+  const hourMatch = text.match(/提前(\d+|[一二三四五六七八九十]+)小时/);
+  if (hourMatch) return chineseNumToInt(hourMatch[1]) * 60;
+
+  // 含「提醒」但未指定时长 → 默认 15 分钟
+  if (/提醒/.test(text)) return 15;
+
+  return null;
+}
+
 export function parseChineseTime(text: string, baseDate: Date = new Date()): ParsedTime {
   // 相对时间偏移优先（保留当前具体时分，故在归零小时前处理）
   const offsetDate = resolveRelativeOffset(baseDate, text);

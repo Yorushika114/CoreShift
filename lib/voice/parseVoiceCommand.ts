@@ -1,4 +1,4 @@
-import { parseChineseTime } from './parseChineseTime';
+import { parseChineseTime, extractReminderOffset } from './parseChineseTime';
 import type { ParsedCommand } from '@/types';
 
 // 时间相关词汇，用于从原文中剥离出标题
@@ -15,8 +15,12 @@ const TIME_PATTERNS = [
   /大后天|今天|今日|明天|明日|后天/,
   /凌晨|早上|上午|中午|下午|傍晚|晚上|夜晚?|晚/,
   /到(\d{1,2}|[一二三四五六七八九十两]+)[点時时]/,
-  // 截止类语义词（"后天之前完成比赛" → 剥离后标题为"完成比赛"）
+  // 截止类语义词
   /之前|以前|截止|之内|以内|前完成/,
+  // 提醒短语
+  /提前(\d+|[一二三四五六七八九十百]+)(分钟|小时)/,
+  /(\d+|[一二三四五六七八九十]+)分钟前/,
+  /提前半小时/,
 ];
 
 function stripTimePhrases(text: string): string {
@@ -32,10 +36,12 @@ function detectIntent(text: string): ParsedCommand['intent'] {
   if (/删除|取消|移除|remove|delete/.test(text)) return 'delete';
   // 查询：用明确的查询词，不含裸"安排"（"安排"在创建指令里太常见，如"安排明天开会"）
   if (/查看|查询|有什么|有哪些|日程|看看/.test(text)) return 'query';
+  // 「提前X分钟/小时提醒」是创建意图（设提醒），不要被下面的"提前"误判为 modify
+  const isReminderPhrase = /提前(\d+|[一二三四五六七八九十百]+)(分钟|小时)|提前半小时/.test(text);
   // 修改：用"改到/改成/改为/改期"等动补结构，不含裸"改"（避免"改稿"这类标题误判）
-  if (/修改|改到|改成|改为|改期|推迟|提前|延期/.test(text)) return 'modify';
+  if (!isReminderPhrase && /修改|改到|改成|改为|改期|推迟|提前|延期/.test(text)) return 'modify';
   if (/添加|新建|创建|加|安排|提醒|开会|会议|约|记/.test(text)) return 'create';
-  return 'create'; // 默认尝试创建
+  return 'create';
 }
 
 // 提取结束时间（"X点到Y点"中的Y点）
@@ -62,6 +68,11 @@ export function parseVoiceCommand(
   const endAt = extractEndTime(text, date);
   const title = stripTimePhrases(text) || undefined;
 
+  const reminderOffsetMin = extractReminderOffset(text);
+  const reminderAt = reminderOffsetMin !== null
+    ? new Date(date.getTime() - reminderOffsetMin * 60 * 1000).toISOString()
+    : undefined;
+
   const ambiguities: string[] = [];
   if (!hasDate) ambiguities.push('未识别到日期，已使用当前选中日期');
   if (!hasTime) ambiguities.push('未识别到具体时间，已设为上午9:00');
@@ -74,6 +85,7 @@ export function parseVoiceCommand(
     endAt,
     hasDate,
     hasTime,
+    reminderAt,
     ambiguities,
     clarificationNeeded: !title,
     clarificationQuestion: !title ? '请问这个事件的标题是什么？' : undefined,

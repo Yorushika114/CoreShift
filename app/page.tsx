@@ -1,7 +1,7 @@
 // app/page.tsx
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { MiniCalendar } from '@/components/calendar/MiniCalendar';
 import { MonthGrid } from '@/components/calendar/MonthGrid';
 import { YearGrid } from '@/components/calendar/YearGrid';
@@ -9,7 +9,9 @@ import { WeekView } from '@/components/calendar/WeekView';
 import { DayView } from '@/components/calendar/DayView';
 import { EventEditorPanel } from '@/components/voice/EventEditorPanel';
 import { VoiceCommandOverlay } from '@/components/voice/VoiceCommandOverlay';
+import { reminderService } from '@/lib/reminder/reminderService';
 import { formatMonthYear, formatDayTitle, getWeekStart } from '@/lib/calendar/date-utils';
+import { expandEvents, realEventId } from '@/lib/calendar/recurrence';
 import type { CalendarEvent } from '@/types';
 
 type ViewMode = 'year' | 'month' | 'week' | 'day';
@@ -38,6 +40,7 @@ export default function CalendarPage() {
   const [voiceOpen, setVoiceOpen] = useState(false);
   // 保存后滚动到该时刻，保证新建/修改的事件立即可见；导航时清除
   const [focusTime, setFocusTime] = useState<Date | null>(null);
+  const [reminderToasts, setReminderToasts] = useState<{ id: string; title: string; timeStr: string }[]>([]);
   const [use24h, setUse24h] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
     const saved = localStorage.getItem('use24h');
@@ -72,8 +75,48 @@ export default function CalendarPage() {
   }, []);
 
   useEffect(() => {
+    reminderService.requestPermission();
+    return reminderService.onFire((event) => {
+      const timeStr = new Date(event.startAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+      const toast = { id: event.id + Date.now(), title: event.title, timeStr };
+      setReminderToasts(prev => [...prev, toast]);
+      setTimeout(() => setReminderToasts(prev => prev.filter(t => t.id !== toast.id)), 8000);
+    });
+  }, []);
+
+  useEffect(() => {
     fetchEvents(viewDate, view);
   }, [viewDate, view, fetchEvents]);
+
+  useEffect(() => {
+    const es = new EventSource('/api/events/stream');
+    es.onmessage = () => fetchEvents(viewDate, view);
+    return () => es.close();
+  }, [fetchEvents, viewDate, view]);
+
+  useEffect(() => {
+    reminderService.scheduleAll(events);
+  }, [events]);
+
+  // Expand weekly recurring events for the current view range
+  const expandedEvents = useMemo(() => {
+    let start: Date, end: Date;
+    if (view === 'year') {
+      start = new Date(viewDate.getFullYear(), 0, 1);
+      end = new Date(viewDate.getFullYear(), 11, 31, 23, 59, 59);
+    } else if (view === 'month') {
+      start = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
+      end = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0, 23, 59, 59);
+    } else if (view === 'week') {
+      const ws = getWeekStart(viewDate);
+      start = ws;
+      end = new Date(ws.getTime() + 7 * 24 * 60 * 60 * 1000 - 1);
+    } else {
+      start = new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate(), 0, 0, 0);
+      end = new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate(), 23, 59, 59);
+    }
+    return expandEvents(events, start, end);
+  }, [events, view, viewDate]);
 
   function handleUse24hChange(value: boolean) {
     setUse24h(value);
@@ -128,7 +171,10 @@ export default function CalendarPage() {
   }
 
   function openEditEditor(event: CalendarEvent) {
-    setEditor({ open: true, event });
+    // Recurring instances have a virtual ID like "realId::isoDate"; resolve to the base event
+    const originalId = realEventId(event.id);
+    const original = events.find(e => e.id === originalId) ?? event;
+    setEditor({ open: true, event: original });
   }
 
   // 语音指令路由（浮层据 intent 调用）
@@ -154,15 +200,15 @@ export default function CalendarPage() {
   }
 
   function handleEditorSaved(saved: CalendarEvent) {
+    const eventDate = new Date(saved.startAt);
     setEditor({ open: false });
     // 跳转到新事件所在日期+时刻，保证创建/修改后立即可见（事件可能落在当前视图范围/可视区外）
-    const d = new Date(saved.startAt);
     const nextView: ViewMode = view === 'year' ? 'month' : view;
-    setSelectedDate(d);
-    setViewDate(d);
+    setSelectedDate(eventDate);
+    setViewDate(eventDate);
     setView(nextView);
-    setFocusTime(d);
-    fetchEvents(d, nextView);
+    setFocusTime(eventDate);
+    fetchEvents(eventDate, nextView);
   }
 
   function handleEditorDeleted() {
@@ -250,6 +296,7 @@ export default function CalendarPage() {
             <span className="text-base">🎙</span>
             语音输入
           </button>
+
         </div>
       </aside>
 
@@ -298,21 +345,21 @@ export default function CalendarPage() {
         {view === 'year' && (
           <YearGrid
             year={viewDate.getFullYear()}
-            events={events}
+            events={expandedEvents}
             onMonthClick={handleMonthClick}
           />
         )}
         {view === 'month' && (
           <MonthGrid
             viewDate={viewDate}
-            events={events}
+            events={expandedEvents}
             onDateClick={handleDayClick}
           />
         )}
         {view === 'week' && (
           <WeekView
             startDate={getWeekStart(viewDate)}
-            events={events}
+            events={expandedEvents}
             use24h={use24h}
             focusTime={focusTime}
             onDayClick={handleDayClick}
@@ -323,7 +370,7 @@ export default function CalendarPage() {
         {view === 'day' && (
           <DayView
             date={viewDate}
-            events={events}
+            events={expandedEvents}
             use24h={use24h}
             focusTime={focusTime}
             onSlotClick={openCreateEditor}
@@ -352,6 +399,26 @@ export default function CalendarPage() {
           onClose={() => setVoiceOpen(false)}
         />
       )}
+
+      {/* Reminder toasts */}
+      <div className="fixed bottom-6 right-6 flex flex-col gap-2 z-[100]">
+        {reminderToasts.map(t => (
+          <div
+            key={t.id}
+            className="flex items-start gap-3 bg-white border border-blue-200 shadow-lg rounded-xl px-4 py-3 w-72 animate-fade-in"
+          >
+            <span className="text-xl">🔔</span>
+            <div>
+              <p className="text-sm font-medium text-gray-800">{t.title}</p>
+              <p className="text-xs text-gray-500 mt-0.5">活动将于 {t.timeStr} 开始</p>
+            </div>
+            <button
+              onClick={() => setReminderToasts(prev => prev.filter(x => x.id !== t.id))}
+              className="ml-auto text-gray-400 hover:text-gray-600 text-lg leading-none flex-shrink-0"
+            >×</button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
