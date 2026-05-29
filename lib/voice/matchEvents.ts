@@ -35,11 +35,12 @@ export function matchEvents(
     result = result.filter((e) => isSameDay(new Date(e.startAt), target));
   }
 
-  // 2) 标题模糊：双向子串匹配（"会议" 命中 "组会议"，"开组会" 命中 "组会"）
+  // 2) 标题模糊：双向子串匹配（"会议" 命中 "组会议"，"开组会" 命中 "组会"）。
+  //    反向（关键词包含标题）要求标题至少 2 字，避免"会/课"等单字标题被任意关键词误命中。
   const kw = criteria.title?.trim();
   if (kw) {
     result = result.filter(
-      (e) => e.title.includes(kw) || kw.includes(e.title)
+      (e) => e.title.includes(kw) || (e.title.length >= 2 && kw.includes(e.title))
     );
   }
 

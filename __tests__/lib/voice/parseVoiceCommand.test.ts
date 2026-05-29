@@ -71,6 +71,31 @@ describe('创建短语不应被误路由（intent 收紧）', () => {
   });
 });
 
+describe('标题剥离指令动词（提升 delete/modify 匹配精度）', () => {
+  it('删除/取消 剥离动词，保留事件关键词', () => {
+    expect(cmd('删除明天的组会').title).toBe('组会');
+    expect(cmd('取消明天的算法课').title).toBe('算法课');
+    expect(cmd('删掉明天的组会').title).toBe('组会');
+  });
+
+  it('创建剥离"安排"，标题为纯事件名', () => {
+    expect(cmd('安排明天下午三点开会').title).toBe('开会');
+  });
+
+  it('修改剥离"把…改到"', () => {
+    expect(cmd('把明天的会议改到下午4点').title).toBe('会议');
+  });
+});
+
+describe('删除说法扩展识别', () => {
+  it('删掉/删了/去掉/清除 都算 delete', () => {
+    expect(cmd('删掉明天的组会').intent).toBe('delete');
+    expect(cmd('删了明天的会').intent).toBe('delete');
+    expect(cmd('去掉明天的算法课').intent).toBe('delete');
+    expect(cmd('清除明天的安排').intent).toBe('delete');
+  });
+});
+
 describe('hasDate / hasTime 透出（供 modify 字段级 patch）', () => {
   it('只说时间：hasTime 真、hasDate 假', () => {
     const c = cmd('把会议改到下午4点');
