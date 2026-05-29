@@ -23,17 +23,24 @@ const TIME_PATTERNS = [
   /提前半小时/,
 ];
 
+// 指令/管理动词：从标题中剥离，避免污染事件名与 delete/modify 的匹配关键词。
+// 只含"删除/查看/修改/安排"这类管理动作，不含"开会/会议/约/记"等事件本身的词。
+const INTENT_VERB_PATTERN =
+  /删除|删掉|删了|取消|移除|去掉|清除|撤销|查看|查询|查一下|看看|有什么|有哪些|修改|改到|改成|改为|改期|延期|推迟|更新|添加|新建|创建|安排|预约|记录|把/g;
+
 function stripTimePhrases(text: string): string {
   let result = text;
   for (const p of TIME_PATTERNS) {
     result = result.replace(new RegExp(p.source, 'g'), '');
   }
+  // 剥离指令动词（"删除明天的组会" → "组会"，"安排明天开会" → "开会"）
+  result = result.replace(INTENT_VERB_PATTERN, '');
   // 清理助词和标点
-  return result.replace(/[，。,.\s的在帮我提醒请]+/g, ' ').trim();
+  return result.replace(/[，。,.\s的在帮我给提醒请]+/g, ' ').trim();
 }
 
 function detectIntent(text: string): ParsedCommand['intent'] {
-  if (/删除|取消|移除|remove|delete/.test(text)) return 'delete';
+  if (/删除|删掉|删了|取消|移除|去掉|清除|撤销|remove|delete/.test(text)) return 'delete';
   // 查询：用明确的查询词，不含裸"安排"（"安排"在创建指令里太常见，如"安排明天开会"）
   if (/查看|查询|有什么|有哪些|日程|看看/.test(text)) return 'query';
   // 「提前X分钟/小时提醒」是创建意图（设提醒），不要被下面的"提前"误判为 modify

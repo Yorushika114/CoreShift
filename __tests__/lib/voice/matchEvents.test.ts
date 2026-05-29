@@ -62,6 +62,13 @@ describe('matchEvents 标题模糊', () => {
     const r = matchEvents(EVENTS, { date: MAY30, hasDate: true, title: '健身' });
     expect(r).toHaveLength(0);
   });
+
+  it('单字事件标题不被关键词反向误匹配', () => {
+    const evs: CalendarEvent[] = [ev('a', '会', 4, 30, 10), ev('b', '组会复盘', 4, 30, 11)];
+    const r = matchEvents(evs, { date: MAY30, hasDate: true, title: '组会' });
+    // "组会" 不应反向命中单字 "会"，只命中 "组会复盘"
+    expect(r.map((e) => e.id)).toEqual(['b']);
+  });
 });
 
 describe('matchEvents 边界', () => {
