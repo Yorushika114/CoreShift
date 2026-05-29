@@ -1,7 +1,7 @@
 // app/page.tsx
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useTransition } from 'react';
 import { MiniCalendar } from '@/components/calendar/MiniCalendar';
 import { MonthGrid } from '@/components/calendar/MonthGrid';
 import { YearGrid } from '@/components/calendar/YearGrid';
@@ -38,6 +38,7 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(true);
   const [editor, setEditor] = useState<EditorState>({ open: false });
   const [voiceOpen, setVoiceOpen] = useState(false);
+  const [, startTransition] = useTransition();
   // 保存后滚动到该时刻，保证新建/修改的事件立即可见；导航时清除
   const [focusTime, setFocusTime] = useState<Date | null>(null);
   const [reminderToasts, setReminderToasts] = useState<{ id: string; title: string; timeStr: string }[]>([]);
@@ -119,8 +120,8 @@ export default function CalendarPage() {
   }, [events, view, viewDate]);
 
   function handleUse24hChange(value: boolean) {
-    setUse24h(value);
     localStorage.setItem('use24h', String(value));
+    startTransition(() => setUse24h(value));
   }
 
   function goToToday() {
