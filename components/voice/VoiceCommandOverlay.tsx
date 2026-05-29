@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSpeechRecognition, type SpeechErrorKind } from '@/lib/voice/useSpeechRecognition';
 import { useTTS } from '@/lib/voice/useTTS';
 import { parseVoiceCommand } from '@/lib/voice/parseVoiceCommand';
@@ -79,11 +79,21 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
   }, [supported, start]);
 
   useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') handleClose();
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     if (error === 'not-allowed' || error === 'unsupported') setTextMode(true);
   }, [error]);
 
   async function handleCommand(text: string) {
     setActionError(null);
+    if (/^退出$|^关闭$|^取消$/.test(text.trim())) { handleClose(); return; }
     const parsed = parseVoiceCommand(text, new Date());
 
     // create / unknown：若有歧义先展示预览让用户确认，否则直接打开编辑面板
@@ -186,7 +196,6 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
-      onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
     >
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
         {/* Header */}

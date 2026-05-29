@@ -107,7 +107,7 @@ function resolveTime(base: Date, text: string): Date {
 
   // X点Y分 / X点半 / X点
   const timeMatch = text.match(
-    /(\d{1,2}|[一二三四五六七八九十两]+)[点時时]([半]|\d{1,2}|[一二三四五六七八九十零]+分?)?/
+    /(\d{1,2}|[一二三四五六七八九十两]+)[点時时]([半]|\d{1,2}分?|[一二三四五六七八九十零]+分?)?/
   );
   if (!timeMatch) return d;
 
