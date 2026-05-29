@@ -8,6 +8,7 @@ import {
   toISODateString,
   formatDayTitle,
   formatTimeSlot,
+  getWeekStart,
 } from '@/lib/calendar/date-utils';
 
 describe('getCalendarDays', () => {
@@ -135,5 +136,33 @@ describe('formatTimeSlot', () => {
 
   it('formats 12h midnight as 上午 12:00', () => {
     expect(formatTimeSlot(0, 0, false)).toBe('上午 12:00');
+  });
+});
+
+describe('getWeekStart', () => {
+  it('returns Monday for a Friday', () => {
+    // 2026-05-29 is Friday, week starts Monday 2026-05-25
+    const result = getWeekStart(new Date(2026, 4, 29));
+    expect(result.getFullYear()).toBe(2026);
+    expect(result.getMonth()).toBe(4);
+    expect(result.getDate()).toBe(25);
+  });
+
+  it('returns same Monday when input is Monday', () => {
+    // 2026-05-25 is Monday
+    const result = getWeekStart(new Date(2026, 4, 25));
+    expect(result.getDate()).toBe(25);
+  });
+
+  it('returns previous Monday when input is Sunday', () => {
+    // 2026-05-31 is Sunday, week starts Monday 2026-05-25
+    const result = getWeekStart(new Date(2026, 4, 31));
+    expect(result.getDate()).toBe(25);
+  });
+
+  it('sets time to midnight', () => {
+    const result = getWeekStart(new Date(2026, 4, 29, 15, 30));
+    expect(result.getHours()).toBe(0);
+    expect(result.getMinutes()).toBe(0);
   });
 });
