@@ -35,6 +35,21 @@ function resolveDate(base: Date, text: string): Date | null {
   const d = new Date(base);
   d.setHours(9, 0, 0, 0); // 默认早上9点
 
+  // 相对月份：下个月X号 / 这个月X号 / 下下个月X号
+  const relMonthMatch = text.match(
+    /(下下个?月|下个?月|这个?月|本月)(\d{1,2}|[一二三四五六七八九十]+)[日号]/
+  );
+  if (relMonthMatch) {
+    const prefix = relMonthMatch[1];
+    const day = chineseNumToInt(relMonthMatch[2]);
+    let offset = 0;
+    if (prefix.startsWith('下下')) offset = 2;
+    else if (prefix.startsWith('下')) offset = 1;
+    // setMonth 会自动处理跨年（如 12 月 + 1 → 次年 1 月）
+    d.setMonth(d.getMonth() + offset, day);
+    return d;
+  }
+
   // 绝对日期：X月X日
   const absMatch = text.match(/(\d{1,2}|[一二三四五六七八九十]+)月(\d{1,2}|[一二三四五六七八九十]+)[日号]/);
   if (absMatch) {
