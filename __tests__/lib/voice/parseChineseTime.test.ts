@@ -95,6 +95,44 @@ describe('绝对日期', () => {
   });
 });
 
+describe('相对月份', () => {
+  // BASE = 2026-05-29
+
+  it('下个月6号', () => {
+    const { date, hasDate } = parse('下个月6号');
+    expect(hasDate).toBe(true);
+    expect(date.getMonth()).toBe(5); // June
+    expect(date.getDate()).toBe(6);
+  });
+
+  it('下个月6日（日字）', () => {
+    const { date } = parse('下个月6日下午3点');
+    expect(date.getMonth()).toBe(5);
+    expect(date.getDate()).toBe(6);
+    expect(date.getHours()).toBe(15);
+  });
+
+  it('这个月15号', () => {
+    const { date } = parse('这个月15号');
+    expect(date.getMonth()).toBe(4); // May
+    expect(date.getDate()).toBe(15);
+  });
+
+  it('下下个月3号', () => {
+    const { date } = parse('下下个月3号');
+    expect(date.getMonth()).toBe(6); // July
+    expect(date.getDate()).toBe(3);
+  });
+
+  it('跨年：12月基准下个月进入次年1月', () => {
+    const dec = new Date(2026, 11, 10); // 2026-12-10
+    const { date } = parseChineseTime('下个月5号', dec);
+    expect(date.getFullYear()).toBe(2027);
+    expect(date.getMonth()).toBe(0); // January
+    expect(date.getDate()).toBe(5);
+  });
+});
+
 describe('时间点', () => {
   it('下午3点', () => {
     const { date, hasTime } = parse('明天下午3点开会');
