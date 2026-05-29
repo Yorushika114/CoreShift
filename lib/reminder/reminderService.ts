@@ -1,8 +1,19 @@
 import type { CalendarEvent } from '@/types';
 
+type ReminderCallback = (event: CalendarEvent) => void;
+
 const timers = new Map<string, ReturnType<typeof setTimeout>>();
+const listeners: ReminderCallback[] = [];
 
 export const reminderService = {
+  onFire(cb: ReminderCallback) {
+    listeners.push(cb);
+    return () => {
+      const i = listeners.indexOf(cb);
+      if (i !== -1) listeners.splice(i, 1);
+    };
+  },
+
   async requestPermission(): Promise<NotificationPermission> {
     if (typeof window === 'undefined' || !('Notification' in window)) return 'denied';
     if (Notification.permission !== 'default') return Notification.permission;
@@ -31,8 +42,15 @@ export const reminderService = {
     if (t) { clearTimeout(t); timers.delete(id); }
   },
 
-  fire(event: CalendarEvent) {
-    if (typeof window === 'undefined' || Notification.permission !== 'granted') return;
+  async fire(event: CalendarEvent) {
+    // In-app toast (always works)
+    listeners.forEach(cb => cb(event));
+
+    // Browser notification
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    if (Notification.permission === 'default') await Notification.requestPermission();
+    if (Notification.permission !== 'granted') return;
+
     const start = new Date(event.startAt);
     const timeStr = start.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
     new Notification(`🔔 ${event.title}`, {
