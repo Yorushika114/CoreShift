@@ -114,7 +114,7 @@ export function EventEditorPanel({
 
   useEffect(() => {
     if (!nlpInput.trim()) { setParsed(null); return; }
-    setParsed(parseVoiceCommand(nlpInput.trim(), new Date()));
+    setParsed(parseVoiceCommand(nlpInput.trim(), defaultStartAt ?? new Date()));
   }, [nlpInput]);
 
   // Keep end date in sync when start date changes (only if they were equal)

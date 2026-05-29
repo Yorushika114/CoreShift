@@ -77,8 +77,11 @@ export function parseVoiceCommand(
   const { date, hasDate, hasTime } = parseChineseTime(text, fallbackDate);
   let resolvedDate = date;
 
-  // BUG-04: only time given (no date) and that time has already passed → default to same time tomorrow
-  if (!hasDate && hasTime && resolvedDate < fallbackDate) {
+  if (!hasDate && !hasTime) {
+    // 没有日期也没有时间 → 直接使用 fallbackDate（保留点击时间格的完整时刻）
+    resolvedDate = new Date(fallbackDate);
+  } else if (!hasDate && hasTime && resolvedDate < fallbackDate) {
+    // BUG-04: only time given (no date) and that time has already passed → default to same time tomorrow
     resolvedDate = new Date(resolvedDate.getTime() + 24 * 60 * 60 * 1000);
   }
 
@@ -99,7 +102,7 @@ export function parseVoiceCommand(
       ambiguities.push('未识别到日期，已使用当前选中日期');
     }
   }
-  if (!hasTime) ambiguities.push('未识别到具体时间，已设为上午9:00');
+  if (!hasTime) ambiguities.push('未识别到具体时间，已使用当前选中时间');
   if (!title) ambiguities.push('未识别到事件标题');
 
   return {
