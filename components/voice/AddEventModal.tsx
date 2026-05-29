@@ -25,8 +25,8 @@ export function AddEventModal({ defaultDate, onClose, onSaved }: Props) {
   // 实时解析
   useEffect(() => {
     if (!input.trim()) { setParsed(null); return; }
-    setParsed(parseVoiceCommand(input.trim(), defaultDate));
-  }, [input, defaultDate]);
+    setParsed(parseVoiceCommand(input.trim(), new Date()));
+  }, [input]);
 
   async function handleSave() {
     if (!parsed?.startAt) return;
