@@ -3,7 +3,7 @@ import type { ParsedCommand } from '@/types';
 
 // 时间相关词汇，用于从原文中剥离出标题
 const TIME_PATTERNS = [
-  /(\d{1,2}|[一二三四五六七八九十两]+)[点時时][半]?(\d{1,2}|[一二三四五六七八九十零]+分?)?/,
+  /(\d{1,2}|[一二三四五六七八九十两]+)[点時时][钟]?[半]?(\d{1,2}|[一二三四五六七八九十零]+分?)?/,
   /(下下周|下周|下个周|这周|本周|这个周)(日|天|一|二|三|四|五|六)/,
   /(下下个?月|下个?月|这个?月|本月)(\d{1,2}|[一二三四五六七八九十]+)[日号]/,
   /(\d{1,2}|[一二三四五六七八九十]+)月(\d{1,2}|[一二三四五六七八九十]+)[日号]/,
@@ -70,18 +70,30 @@ export function parseVoiceCommand(
 ): ParsedCommand {
   const intent = detectIntent(text);
   const { date, hasDate, hasTime } = parseChineseTime(text, fallbackDate);
-  const startAt = date.toISOString();
+  let resolvedDate = date;
 
-  const endAt = extractEndTime(text, date);
+  // BUG-04: only time given (no date) and that time has already passed → default to same time tomorrow
+  if (!hasDate && hasTime && resolvedDate < fallbackDate) {
+    resolvedDate = new Date(resolvedDate.getTime() + 24 * 60 * 60 * 1000);
+  }
+
+  const startAt = resolvedDate.toISOString();
+  const endAt = extractEndTime(text, resolvedDate);
   const title = stripTimePhrases(text) || undefined;
 
   const reminderOffsetMin = extractReminderOffset(text);
   const reminderAt = reminderOffsetMin !== null
-    ? new Date(date.getTime() - reminderOffsetMin * 60 * 1000).toISOString()
+    ? new Date(resolvedDate.getTime() - reminderOffsetMin * 60 * 1000).toISOString()
     : undefined;
 
   const ambiguities: string[] = [];
-  if (!hasDate) ambiguities.push('未识别到日期，已使用当前选中日期');
+  if (!hasDate) {
+    if (hasTime && resolvedDate.getTime() !== date.getTime()) {
+      ambiguities.push('该时间今天已过，已自动设为明天同一时刻');
+    } else {
+      ambiguities.push('未识别到日期，已使用当前选中日期');
+    }
+  }
   if (!hasTime) ambiguities.push('未识别到具体时间，已设为上午9:00');
   if (!title) ambiguities.push('未识别到事件标题');
 

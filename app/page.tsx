@@ -101,9 +101,17 @@ export default function CalendarPage() {
     return () => es.close();
   }, [fetchEvents, viewDate, view]);
 
-  useEffect(() => {
-    reminderService.scheduleAll(events);
+  // Expand recurring events over the next 7 days specifically for reminder scheduling,
+  // independent of the current view range so reminders always fire correctly.
+  const reminderReadyEvents = useMemo(() => {
+    const now = new Date();
+    const end = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    return expandEvents(events, now, end);
   }, [events]);
+
+  useEffect(() => {
+    reminderService.scheduleAll(reminderReadyEvents);
+  }, [reminderReadyEvents]);
 
   // Expand weekly recurring events for the current view range
   const expandedEvents = useMemo(() => {

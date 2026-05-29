@@ -98,11 +98,12 @@ function resolveDate(base: Date, text: string): Date | null {
 function resolveTime(base: Date, text: string): Date {
   const d = new Date(base);
 
-  // 提取时段前缀决定小时基准
-  let hourBase = -1;
-  for (const [word, h] of Object.entries(HOUR_WORDS)) {
-    if (text.includes(word)) { hourBase = h; break; }
-  }
+  // 提取时段前缀决定小时基准。
+  // 短词（早/晚/夜）必须紧跟数字或中文数字才算时段词，避免被"早会""晚点"等误触发。
+  const periodMatch = text.match(
+    /凌晨|早上|上午|中午|下午|傍晚|晚上|晚(?=\d|[一二三四五六七八九十两])|夜(?=\d|[一二三四五六七八九十两])|早(?=\d|[一二三四五六七八九十两])/
+  );
+  let hourBase = periodMatch ? (HOUR_WORDS[periodMatch[0]] ?? -1) : -1;
 
   // X点Y分 / X点半 / X点
   const timeMatch = text.match(
@@ -197,7 +198,7 @@ export function parseChineseTime(text: string, baseDate: Date = new Date()): Par
   const workDate = resolvedDate ?? new Date(base);
 
   const hasTime = /[点時时]/.test(text) ||
-    Object.keys(HOUR_WORDS).some(w => text.includes(w));
+    /凌晨|早上|上午|中午|下午|傍晚|晚上|晚(?=\d|[一二三四五六七八九十两])|夜(?=\d|[一二三四五六七八九十两])|早(?=\d|[一二三四五六七八九十两])/.test(text);
 
   const finalDate = hasTime ? resolveTime(workDate, text) : workDate;
 

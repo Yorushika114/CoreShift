@@ -6,7 +6,7 @@ import { parseVoiceCommand } from '@/lib/voice/parseVoiceCommand';
 import { matchEvents } from '@/lib/voice/matchEvents';
 import { applyModify } from '@/lib/voice/applyModify';
 import { formatDateCN, formatTimeCN } from '@/lib/calendar/date-utils';
-import type { CalendarEvent } from '@/types';
+import type { CalendarEvent, ParsedCommand } from '@/types';
 
 interface Props {
   /** create / unknown：把原文交给页面，打开编辑面板预填。 */
@@ -26,6 +26,7 @@ const ERROR_MESSAGES: Record<SpeechErrorKind, string> = {
   'no-speech': '没听清，请再说一次或改用文字',
   network: '网络异常，请重试或改用文字',
   aborted: '识别已取消',
+  'audio-capture': '麦克风被占用或设备异常，请检查音频设备',
   unknown: '识别出错，请重试或改用文字',
 };
 
@@ -33,7 +34,8 @@ type Result =
   | { kind: 'notfound'; intent: 'delete' | 'modify' }
   | { kind: 'delete'; events: CalendarEvent[] }
   | { kind: 'modify-pick'; events: CalendarEvent[]; pick: (e: CalendarEvent) => void }
-  | { kind: 'query'; date: Date; events: CalendarEvent[] };
+  | { kind: 'query'; date: Date; events: CalendarEvent[] }
+  | { kind: 'create-preview'; parsed: ParsedCommand; original: string };
 
 function dayRange(d: Date): [Date, Date] {
   const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
@@ -82,9 +84,13 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
     setActionError(null);
     const parsed = parseVoiceCommand(text, new Date());
 
-    // create / unknown：交给页面打开编辑面板预填
+    // create / unknown：若有歧义先展示预览让用户确认，否则直接打开编辑面板
     if (parsed.intent === 'create' || parsed.intent === 'unknown') {
-      onCreate(text);
+      if (parsed.ambiguities.length > 0) {
+        setResult({ kind: 'create-preview', parsed, original: text });
+      } else {
+        onCreate(text);
+      }
       return;
     }
 
@@ -250,16 +256,59 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
               </>
             )}
 
+            {result.kind === 'create-preview' && (
+              <>
+                <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">识别结果</p>
+                <div className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500 w-10 flex-shrink-0">标题</span>
+                    <span className="text-sm text-gray-800 font-medium">
+                      {result.parsed.title ?? <span className="text-amber-500 italic">（未识别）</span>}
+                    </span>
+                  </div>
+                  {result.parsed.startAt && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500 w-10 flex-shrink-0">时间</span>
+                      <span className="text-sm text-gray-800">
+                        {formatDateCN(new Date(result.parsed.startAt))} {formatTimeCN(new Date(result.parsed.startAt))}
+                      </span>
+                    </div>
+                  )}
+                  {result.parsed.ambiguities.map((msg, i) => (
+                    <p key={i} className="text-xs text-amber-600 flex items-center gap-1">
+                      <span>⚠</span>{msg}
+                    </p>
+                  ))}
+                </div>
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    onClick={() => setResult(null)}
+                    className="px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100 rounded-full transition"
+                  >
+                    重新输入
+                  </button>
+                  <button
+                    onClick={() => onCreate(result.original)}
+                    className="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-full hover:bg-blue-600 transition"
+                  >
+                    填写详情
+                  </button>
+                </div>
+              </>
+            )}
+
             {actionError && <p className="text-xs text-red-500">{actionError}</p>}
 
-            <div className="flex justify-end pt-1">
-              <button
-                onClick={handleClose}
-                className="px-4 py-1.5 text-sm text-gray-500 hover:bg-gray-100 rounded-full transition"
-              >
-                关闭
-              </button>
-            </div>
+            {result.kind !== 'create-preview' && (
+              <div className="flex justify-end pt-1">
+                <button
+                  onClick={handleClose}
+                  className="px-4 py-1.5 text-sm text-gray-500 hover:bg-gray-100 rounded-full transition"
+                >
+                  关闭
+                </button>
+              </div>
+            )}
           </div>
         ) : busy ? (
           <div className="px-5 py-10 flex flex-col items-center gap-3">
