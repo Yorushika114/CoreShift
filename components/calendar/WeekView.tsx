@@ -41,7 +41,7 @@ export function WeekView({ startDate, events, use24h, onDayClick }: WeekViewProp
 
   useEffect(() => {
     if (!scrollRef.current) return;
-    const allEvents = [...eventsByDate.values()].flat();
+    const allEvents = Array.from(eventsByDate.values()).flat();
     let scrollTop: number;
     if (allEvents.length > 0) {
       const first = allEvents.reduce((a, b) =>
