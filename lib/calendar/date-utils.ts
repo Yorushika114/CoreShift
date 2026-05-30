@@ -84,3 +84,37 @@ export function getWeekStart(date: Date): Date {
   d.setHours(0, 0, 0, 0);
   return d;
 }
+
+// Returns { hours, minutes } of date in the given IANA timezone.
+// Falls back to local time on invalid/missing timezone.
+export function getHoursInTimezone(
+  date: Date,
+  timezone?: string,
+): { hours: number; minutes: number } {
+  if (!timezone) return { hours: date.getHours(), minutes: date.getMinutes() };
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false,
+    }).formatToParts(date);
+    const h = parseInt(parts.find(p => p.type === 'hour')?.value ?? String(date.getHours()), 10);
+    const m = parseInt(parts.find(p => p.type === 'minute')?.value ?? String(date.getMinutes()), 10);
+    return { hours: h % 24, minutes: m };
+  } catch {
+    return { hours: date.getHours(), minutes: date.getMinutes() };
+  }
+}
+
+// Returns YYYY-MM-DD of date in the given IANA timezone.
+// Falls back to local date on invalid/missing timezone.
+export function getDateStringInTimezone(date: Date, timezone?: string): string {
+  if (!timezone) return toISODateString(date);
+  try {
+    // sv-SE locale reliably formats as YYYY-MM-DD
+    return new Intl.DateTimeFormat('sv-SE', { timeZone: timezone }).format(date);
+  } catch {
+    return toISODateString(date);
+  }
+}
