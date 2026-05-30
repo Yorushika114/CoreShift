@@ -10,6 +10,26 @@ import type { CalendarEvent } from '@/types';
 
 const SLOT_HEIGHT = 48; // px per 30-min slot
 
+function layoutEvents(events: CalendarEvent[]) {
+  const sorted = [...events].sort((a, b) => +new Date(a.startAt) - +new Date(b.startAt));
+  type Row = { event: CalendarEvent; col: number; startMs: number; endMs: number };
+  const rows: Row[] = [];
+  const colEnds: number[] = [];
+  for (const ev of sorted) {
+    const startMs = +new Date(ev.startAt);
+    const endMs = ev.endAt ? +new Date(ev.endAt) : startMs + 30 * 60_000;
+    let col = colEnds.findIndex(e => e <= startMs);
+    if (col === -1) col = colEnds.length;
+    colEnds[col] = endMs;
+    rows.push({ event: ev, col, startMs, endMs });
+  }
+  return rows.map(row => {
+    const concurrent = rows.filter(r => r.startMs < row.endMs && r.endMs > row.startMs);
+    const totalCols = Math.max(...concurrent.map(r => r.col)) + 1;
+    return { ...row, totalCols };
+  });
+}
+
 interface DayViewProps {
   date: Date;
   events: CalendarEvent[];
@@ -130,37 +150,46 @@ export function DayView({ date, events, focusTime, onSlotClick, onEventClick }: 
             </div>
           )}
 
-          {/* Timed event blocks */}
-          {timedEvents.map(event => {
-            const start = new Date(event.startAt);
-            const end = event.endAt
-              ? new Date(event.endAt)
-              : new Date(start.getTime() + 30 * 60 * 1000);
-            const topPx = (start.getHours() * 60 + start.getMinutes()) / 30 * SLOT_HEIGHT;
-            const durationMin = (end.getTime() - start.getTime()) / 60000;
-            const heightPx = Math.max(durationMin / 30 * SLOT_HEIGHT, 28);
-            const isShort = heightPx < 40;
+          {/* Timed event blocks — wrapper offsets the time-label column */}
+          <div className="absolute left-20 right-2 top-0 bottom-0 pointer-events-none">
+            {layoutEvents(timedEvents).map(({ event, col, totalCols }) => {
+              const start = new Date(event.startAt);
+              const end = event.endAt
+                ? new Date(event.endAt)
+                : new Date(start.getTime() + 30 * 60_000);
+              const topPx = (start.getHours() * 60 + start.getMinutes()) / 30 * SLOT_HEIGHT;
+              const durationMin = (end.getTime() - start.getTime()) / 60000;
+              const heightPx = Math.max(durationMin / 30 * SLOT_HEIGHT - 1, 24);
+              const isShort = heightPx < 40;
+              const colW = 100 / totalCols;
+              const leftPct = col * colW;
 
-            return (
-              <div
-                key={event.id}
-                data-testid={`event-block-${event.id}`}
-                onClick={e => { e.stopPropagation(); onEventClick?.(event); }}
-                className={`absolute left-20 right-2 rounded-md px-2 py-1 ${colorFor(event)} text-white overflow-hidden ${onEventClick ? 'cursor-pointer hover:brightness-110' : ''}`}
-                style={{ top: `${topPx}px`, height: `${heightPx}px` }}
-              >
-                <div className="text-xs font-medium truncate leading-tight flex items-center gap-1">
-                  {event.recurrence && <span className="opacity-75 flex-shrink-0">↺</span>}
-                  {event.title}
-                </div>
-                {!isShort && (
-                  <div className="text-xs opacity-80">
-                    {formatTimeSlot(start.getHours(), start.getMinutes(), use24h)}
+              return (
+                <div
+                  key={event.id}
+                  data-testid={`event-block-${event.id}`}
+                  onClick={e => { e.stopPropagation(); onEventClick?.(event); }}
+                  className={`absolute rounded-md px-2 py-1 pointer-events-auto ${colorFor(event)} text-white overflow-hidden ${onEventClick ? 'cursor-pointer hover:brightness-110' : ''}`}
+                  style={{
+                    top: `${topPx}px`,
+                    height: `${heightPx}px`,
+                    left: `calc(${leftPct}% + 1px)`,
+                    right: `calc(${100 - leftPct - colW}% + 1px)`,
+                  }}
+                >
+                  <div className="text-xs font-medium truncate leading-tight flex items-center gap-1">
+                    {event.recurrence && <span className="opacity-75 flex-shrink-0">↺</span>}
+                    {event.title}
                   </div>
-                )}
-              </div>
-            );
-          })}
+                  {!isShort && (
+                    <div className="text-xs opacity-80">
+                      {formatTimeSlot(start.getHours(), start.getMinutes(), use24h)}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>
