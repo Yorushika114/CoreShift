@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
           allDay: ev.allDay,
           color: 'blue',
           icsUid: ev.uid,
+          icsSeriesUid: ev.seriesUid ?? null,
         },
       });
       imported++;
