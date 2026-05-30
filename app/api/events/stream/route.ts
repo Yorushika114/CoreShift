@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { eventBus } from '@/lib/sse/eventBus';
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export async function GET() {
   let ctrl: ReadableStreamDefaultController<Uint8Array>;
 
