@@ -8,12 +8,16 @@ export const metadata: Metadata = {
   title: 'CoreShift - 语音日历',
   description: '以语音为核心入口的日历管理工具',
   manifest: '/manifest.json',
+  themeColor: '#2563eb',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
     title: 'CoreShift',
   },
   formatDetection: { telephone: false },
+  icons: {
+    apple: '/icon-192.png',
+  },
 }
 
 export default function RootLayout({
@@ -23,10 +27,6 @@ export default function RootLayout({
 }) {
   return (
     <html lang="zh">
-      <head>
-        <meta name="theme-color" content="#2563eb" />
-        <link rel="apple-touch-icon" href="/icon-192.png" />
-      </head>
       <body className={inter.className}>{children}</body>
     </html>
   )
