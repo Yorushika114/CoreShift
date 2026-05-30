@@ -24,6 +24,7 @@ model Event {
   googleCalendarId    String?
   googleCalendarColor String?
   icsUid              String?   @unique
+  icsSeriesUid        String?
 }
 
 model TimeBudget {

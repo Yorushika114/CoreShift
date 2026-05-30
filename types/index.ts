@@ -11,6 +11,8 @@ export type CalendarEvent = {
   createdAt: string;
   updatedAt: string;
   sourceText?: string | null;
+  icsUid?: string | null;
+  icsSeriesUid?: string | null;
 };
 
 export type Intent = 'create' | 'delete' | 'query' | 'modify' | 'summarize' | 'budget_query' | 'budget_create' | 'unknown';
