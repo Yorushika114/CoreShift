@@ -84,7 +84,7 @@ export function SettingsPanel({ googleConnected, syncing, syncMsg, onSync }: Set
       </button>
 
       {open && (
-        <div className="border-t border-gray-100 px-3 py-3 space-y-4">
+        <div className="border-t border-gray-100 px-3 pt-3 pb-4 space-y-4">
 
           {/* Time format */}
           <div>

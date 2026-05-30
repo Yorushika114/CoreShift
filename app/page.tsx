@@ -279,52 +279,61 @@ function CalendarPageInner() {
   return (
     <div className="flex h-screen bg-white font-sans">
       {/* Left Sidebar */}
-      <aside className="w-64 border-r border-gray-200 flex flex-col p-4 gap-3 flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <span className="text-2xl">🗓</span>
-          <span className="text-lg font-medium text-gray-700">CoreShift</span>
+      <aside className="w-64 border-r border-gray-200 flex flex-col flex-shrink-0 overflow-hidden">
+        {/* 固定顶部：不参与滚动 */}
+        <div className="flex flex-col gap-3 p-4 pb-2 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">🗓</span>
+            <span className="text-lg font-medium text-gray-700">CoreShift</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={goToToday}
+              className="text-sm border border-gray-300 rounded-full px-4 py-1.5 hover:bg-gray-50 text-gray-600 transition-colors"
+            >
+              {t('today')}
+            </button>
+            <button
+              onClick={() => openCreateEditor()}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-white bg-blue-500 hover:bg-blue-600 rounded-full transition shadow-sm"
+            >
+              <span className="text-base leading-none">+</span>
+              {t('newBtn')}
+            </button>
+          </div>
+
+          <MiniCalendar
+            selectedDate={selectedDate}
+            onDateSelect={date => {
+              setSelectedDate(date);
+              setViewDate(date);
+              setView('day');
+            }}
+          />
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={goToToday}
-            className="text-sm border border-gray-300 rounded-full px-4 py-1.5 hover:bg-gray-50 text-gray-600 transition-colors"
-          >
-            {t('today')}
-          </button>
-          <button
-            onClick={() => openCreateEditor()}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-white bg-blue-500 hover:bg-blue-600 rounded-full transition shadow-sm"
-          >
-            <span className="text-base leading-none">+</span>
-            {t('newBtn')}
-          </button>
-        </div>
-
-        <MiniCalendar
-          selectedDate={selectedDate}
-          onDateSelect={date => {
-            setSelectedDate(date);
-            setViewDate(date);
-            setView('day');
-          }}
-        />
-
-        <div className="mt-auto flex flex-col gap-3">
+        {/* 弹性底部：撑满剩余高度，超出时可滚动 */}
+        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 px-4 pb-4">
+          {/* spacer 把内容顶到底部，自身可被压缩到 0 */}
+          <div className="flex-1 min-h-0" />
+          {/* flex-shrink-0 确保这两个元素不被压缩，从而触发容器滚动 */}
           <button
             onClick={() => setVoiceOpen(true)}
-            className="flex items-center justify-center gap-2 border border-gray-200 rounded-lg p-3 text-sm text-gray-600 hover:bg-gray-50 hover:border-blue-300 transition"
+            className="flex-shrink-0 flex items-center justify-center gap-2 border border-gray-200 rounded-lg p-3 text-sm text-gray-600 hover:bg-gray-50 hover:border-blue-300 transition"
           >
             <span className="text-base">🎙</span>
             {t('voiceInput')}
           </button>
 
-          <SettingsPanel
-            googleConnected={googleConnected}
-            syncing={syncing}
-            syncMsg={syncMsg}
-            onSync={handleSync}
-          />
+          <div className="flex-shrink-0">
+            <SettingsPanel
+              googleConnected={googleConnected}
+              syncing={syncing}
+              syncMsg={syncMsg}
+              onSync={handleSync}
+            />
+          </div>
         </div>
       </aside>
 
