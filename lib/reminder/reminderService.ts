@@ -4,8 +4,13 @@ type ReminderCallback = (event: CalendarEvent) => void;
 
 const timers = new Map<string, ReturnType<typeof setTimeout>>();
 const listeners: ReminderCallback[] = [];
+let currentLang: 'zh' | 'en' = 'zh';
 
 export const reminderService = {
+  setLang(lang: 'zh' | 'en') {
+    currentLang = lang;
+  },
+
   onFire(cb: ReminderCallback) {
     listeners.push(cb);
     return () => {
@@ -52,10 +57,11 @@ export const reminderService = {
     if (Notification.permission !== 'granted') return;
 
     const start = new Date(event.startAt);
-    const timeStr = start.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-    new Notification(`🔔 ${event.title}`, {
-      body: `活动将于 ${timeStr} 开始`,
-      tag: event.id,
-    });
+    const locale = currentLang === 'en' ? 'en-US' : 'zh-CN';
+    const timeStr = start.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+    const body = currentLang === 'en'
+      ? `Starts at ${timeStr}`
+      : `活动将于 ${timeStr} 开始`;
+    new Notification(`🔔 ${event.title}`, { body, tag: event.id });
   },
 };
