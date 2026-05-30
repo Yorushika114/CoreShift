@@ -20,8 +20,14 @@ export async function GET(request: NextRequest) {
     new Date(tokens.expiry_date ?? Date.now() + 3600 * 1000)
   );
 
-  // 反向代理（Railway）环境下 request.url 是内部地址，需用转发头构造正确 origin
-  const proto = request.headers.get('x-forwarded-proto') ?? 'https';
-  const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host') ?? '';
-  return NextResponse.redirect(`${proto}://${host}/`);
+  // 从 GOOGLE_REDIRECT_URI 推导 base URL，避免反向代理环境下 request.url 为 localhost
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI ?? '';
+  const baseUrl = redirectUri
+    ? redirectUri.replace('/api/auth/google/callback', '')
+    : (() => {
+        const proto = request.headers.get('x-forwarded-proto') ?? 'https';
+        const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host') ?? '';
+        return `${proto}://${host}`;
+      })();
+  return NextResponse.redirect(`${baseUrl}/`);
 }
