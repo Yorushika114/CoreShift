@@ -28,6 +28,7 @@ type Result =
   | { kind: 'delete'; events: CalendarEvent[]; approximate?: boolean }
   | { kind: 'modify-pick'; events: CalendarEvent[]; pick: (e: CalendarEvent) => void; approximate?: boolean }
   | { kind: 'query'; date: Date; events: CalendarEvent[]; aiSummary?: string }
+  | { kind: 'summarize'; summary: string; events: CalendarEvent[]; rangeLabel: string }
   | { kind: 'create-preview'; parsed: ParsedCommand; original: string };
 
 function dayRange(d: Date): [Date, Date] {
@@ -71,6 +72,8 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
   const [actionError, setActionError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [lang, setLang] = useState<'zh-CN' | 'en-US'>('zh-CN');
+  const [ttsEnabled, setTtsEnabled] = useState(true);
+  const [summaryListOpen, setSummaryListOpen] = useState(false);
   const { timezone } = useSettings();
 
   const { supported, listening, interimText, error, start, stop } = useSpeechRecognition({
@@ -161,6 +164,36 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
         return;
       }
 
+      if (parsed.intent === 'summarize') {
+        const fetchStart = parsed.queryRangeStart
+          ? new Date(parsed.queryRangeStart)
+          : dayRange(new Date())[0];
+        const fetchEnd = parsed.queryRangeEnd
+          ? new Date(parsed.queryRangeEnd)
+          : dayRange(new Date())[1];
+
+        setSummaryListOpen(false);
+        const events = await fetchRange([fetchStart, fetchEnd]);
+        const summaryRes = await fetch('/api/llm/schedule-summary', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            events,
+            lang,
+            rangeStart: fetchStart.toISOString(),
+            rangeEnd: fetchEnd.toISOString(),
+            tz: timezone,
+          }),
+        });
+        const { summary } = summaryRes.ok
+          ? (await summaryRes.json() as { summary: string })
+          : { summary: lang === 'en-US' ? 'Could not generate summary.' : '摘要生成失败。' };
+
+        setResult({ kind: 'summarize', summary, events, rangeLabel: '' });
+        if (ttsEnabled) speak(summary);
+        return;
+      }
+
       const events = await fetchRange(wideRange());
       const { results, tier } = matchEvents(events, {
         date: targetDate,
@@ -221,6 +254,54 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
     } catch {
       setActionError(language === 'zh' ? '删除失败，请重试' : 'Delete failed, please retry');
       setDeletingId(null);
+    }
+  }
+
+  async function handleSummary(range: 'today' | 'week') {
+    setActionError(null);
+    setResult(null);
+    setSummaryListOpen(false);
+    setBusy(true);
+
+    const now = new Date();
+    let fetchStart: Date;
+    let fetchEnd: Date;
+    let rangeLabel: string;
+
+    if (range === 'today') {
+      [fetchStart, fetchEnd] = dayRange(now);
+      rangeLabel = lang === 'en-US' ? 'Today' : '今天';
+    } else {
+      const day = now.getDay(); // 0=Sun
+      const mondayOffset = day === 0 ? -6 : 1 - day;
+      fetchStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOffset, 0, 0, 0);
+      fetchEnd = new Date(fetchStart.getTime() + 7 * 24 * 60 * 60 * 1000 - 1);
+      rangeLabel = lang === 'en-US' ? 'This Week' : '本周';
+    }
+
+    try {
+      const events = await fetchRange([fetchStart, fetchEnd]);
+      const summaryRes = await fetch('/api/llm/schedule-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          events,
+          lang,
+          rangeStart: fetchStart.toISOString(),
+          rangeEnd: fetchEnd.toISOString(),
+          tz: timezone,
+        }),
+      });
+      const { summary } = summaryRes.ok
+        ? (await summaryRes.json() as { summary: string })
+        : { summary: lang === 'en-US' ? 'Could not generate summary.' : '摘要生成失败。' };
+
+      setResult({ kind: 'summarize', summary, events, rangeLabel });
+      if (ttsEnabled) speak(summary);
+    } catch {
+      setActionError(lang === 'en-US' ? 'Summary failed, please retry' : '摘要生成失败，请重试');
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -339,6 +420,58 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
               </>
             )}
 
+            {result.kind === 'summarize' && (
+              <>
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs text-blue-400 font-medium">
+                    {result.rangeLabel
+                      ? (lang === 'en-US' ? `AI Summary · ${result.rangeLabel}` : `AI 摘要 · ${result.rangeLabel}`)
+                      : (lang === 'en-US' ? 'AI Summary' : 'AI 摘要')}
+                  </p>
+                  <button
+                    onClick={() => setTtsEnabled(v => !v)}
+                    className={`text-xs px-2 py-0.5 rounded-full border transition ${
+                      ttsEnabled
+                        ? 'border-blue-300 text-blue-500 bg-blue-50'
+                        : 'border-gray-200 text-gray-400 hover:bg-gray-100'
+                    }`}
+                    title={ttsEnabled
+                      ? (lang === 'en-US' ? 'Mute TTS' : '关闭朗读')
+                      : (lang === 'en-US' ? 'Enable TTS' : '开启朗读')}
+                  >
+                    {ttsEnabled ? '🔊' : '🔇'}
+                  </button>
+                </div>
+                <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3">
+                  <p className="text-sm text-blue-800 leading-relaxed">{result.summary}</p>
+                </div>
+                {result.events.length > 0 && (
+                  <div>
+                    <button
+                      onClick={() => setSummaryListOpen(v => !v)}
+                      className="text-xs text-gray-400 hover:text-gray-600 transition flex items-center gap-1 mt-2"
+                    >
+                      <span>{summaryListOpen ? '▾' : '▸'}</span>
+                      {summaryListOpen
+                        ? (lang === 'en-US' ? 'Collapse' : '收起')
+                        : (lang === 'en-US'
+                            ? `Show ${result.events.length} event${result.events.length > 1 ? 's' : ''}`
+                            : `展开 ${result.events.length} 个安排`)}
+                    </button>
+                    {summaryListOpen && (
+                      <div className="mt-2 space-y-2 max-h-48 overflow-y-auto">
+                        {result.events.map((e) => (
+                          <div key={e.id} className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3">
+                            {eventRow(e)}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+
             {result.kind === 'create-preview' && (
               <>
                 <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">{t('recognitionResult')}</p>
@@ -428,6 +561,21 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
               {t('voiceExamples')}
             </p>
 
+            <div className="flex gap-2">
+              <button
+                onClick={() => { stop(); void handleSummary('today'); }}
+                className="text-xs px-3 py-1 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-100 transition"
+              >
+                {lang === 'en-US' ? '📋 Today' : '📋 今天'}
+              </button>
+              <button
+                onClick={() => { stop(); void handleSummary('week'); }}
+                className="text-xs px-3 py-1 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-100 transition"
+              >
+                {lang === 'en-US' ? '📋 This Week' : '📋 本周'}
+              </button>
+            </div>
+
             <button
               onClick={() => { stop(); setTextMode(true); }}
               className="text-xs text-blue-500 hover:text-blue-700 transition"
@@ -464,6 +612,20 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
                 className="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-full hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed transition"
               >
                 {t('ok')}
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => void handleSummary('today')}
+                className="text-xs px-3 py-1 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-100 transition"
+              >
+                {lang === 'en-US' ? '📋 Today' : '📋 今天'}
+              </button>
+              <button
+                onClick={() => void handleSummary('week')}
+                className="text-xs px-3 py-1 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-100 transition"
+              >
+                {lang === 'en-US' ? '📋 This Week' : '📋 本周'}
               </button>
             </div>
           </div>
