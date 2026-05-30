@@ -118,3 +118,31 @@ export function parseVoiceCommand(
     clarificationQuestion: !title ? '请问这个事件的标题是什么？' : undefined,
   };
 }
+
+type LLMParsedCommand = ParsedCommand & {
+  queryRangeStart?: string;
+  queryRangeEnd?: string;
+};
+
+/**
+ * LLM 优先的语音指令解析。调用 /api/llm/parse，失败时静默降级到正则解析。
+ */
+export async function parseVoiceCommandWithLLM(
+  text: string,
+  lang: 'zh-CN' | 'en-US' = 'zh-CN',
+  fallbackDate: Date = new Date()
+): Promise<LLMParsedCommand> {
+  try {
+    const res = await fetch('/api/llm/parse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, lang, now: fallbackDate.toISOString() }),
+    });
+    if (!res.ok) throw new Error(`LLM parse failed: ${res.status}`);
+    const parsed = await res.json() as LLMParsedCommand;
+    if (!Array.isArray(parsed.ambiguities)) parsed.ambiguities = [];
+    return parsed;
+  } catch {
+    return parseVoiceCommand(text, fallbackDate);
+  }
+}
