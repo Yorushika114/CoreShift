@@ -19,7 +19,7 @@ interface DayViewProps {
 }
 
 export function DayView({ date, events, focusTime, onSlotClick, onEventClick }: DayViewProps) {
-  const { use24h, timezone } = useSettings();
+  const { use24h, timezone, t } = useSettings();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   function handleGridClick(e: React.MouseEvent<HTMLDivElement>) {
@@ -67,7 +67,7 @@ export function DayView({ date, events, focusTime, onSlotClick, onEventClick }: 
       {allDayEvents.length > 0 && (
         <div className="flex-shrink-0 flex border-b border-gray-200 bg-gray-50">
           <div className="w-20 flex-shrink-0 text-xs text-gray-400 flex items-center justify-end pr-2 py-1">
-            全天
+            {t('allDay2')}
           </div>
           <div className="flex-1 border-l border-gray-200 p-1 flex flex-col gap-0.5">
             {allDayEvents.map(event => (
@@ -104,7 +104,10 @@ export function DayView({ date, events, focusTime, onSlotClick, onEventClick }: 
               >
                 <div className="w-20 flex-shrink-0 flex items-start justify-end pr-3 pt-1">
                   {minute === 0 && (
-                    <span className="text-xs text-gray-400 whitespace-nowrap">
+                    <span
+                      className="text-xs text-gray-600 whitespace-nowrap"
+                      style={{ textShadow: '0 0 4px #fff, 0 0 8px #fff' }}
+                    >
                       {formatTimeSlot(hour, 0, use24h)}
                     </span>
                   )}

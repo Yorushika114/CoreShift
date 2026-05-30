@@ -1,6 +1,9 @@
 // components/events/EventCard.tsx
+'use client';
+
 import { formatTimeCN } from '@/lib/calendar/date-utils';
 import { colorFor } from '@/lib/calendar/color-utils';
+import { useSettings } from '@/contexts/SettingsContext';
 import type { CalendarEvent } from '@/types';
 
 interface EventCardProps {
@@ -10,6 +13,7 @@ interface EventCardProps {
 }
 
 export function EventCard({ event, compact = false, onClick }: EventCardProps) {
+  const { t } = useSettings();
   const color = colorFor(event);
   const time = formatTimeCN(new Date(event.startAt));
   const label = event.allDay
@@ -39,9 +43,9 @@ export function EventCard({ event, compact = false, onClick }: EventCardProps) {
         {event.title}
       </div>
       {!event.allDay && <div className="text-xs opacity-90 mt-0.5">{time}</div>}
-      {event.allDay && <div className="text-xs opacity-90 mt-0.5">全天</div>}
+      {event.allDay && <div className="text-xs opacity-90 mt-0.5">{t('allDay2')}</div>}
       {event.reminderAt && (
-        <div className="text-xs opacity-75 mt-1">🔔 提醒已设置</div>
+        <div className="text-xs opacity-75 mt-1">🔔 {t('reminderSet')}</div>
       )}
     </div>
   );
