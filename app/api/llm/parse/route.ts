@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'deepseek-chat',
+        model: process.env.DEEPSEEK_MODEL ?? process.env.model ?? 'deepseek-chat',
         messages: [
           { role: 'system', content: systemPrompt + langHint },
           { role: 'user', content: text },
