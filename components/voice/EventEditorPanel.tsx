@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { parseVoiceCommandWithLLM } from '@/lib/voice/parseVoiceCommand';
 import { useSpeechRecognition } from '@/lib/voice/useSpeechRecognition';
-import { formatDateCN, formatTimeCN } from '@/lib/calendar/date-utils';
+import { formatDate, formatTime, formatTimeCN } from '@/lib/calendar/date-utils';
 import { EVENT_COLOR_OPTIONS } from '@/lib/calendar/color-utils';
 import { useSettings } from '@/contexts/SettingsContext';
 import type { CalendarEvent, ParsedCommand } from '@/types';
@@ -50,7 +50,8 @@ export function EventEditorPanel({
   onSaved,
   onDeleted,
 }: Props) {
-  const { t } = useSettings();
+  const { t, language } = useSettings();
+  const nlpLang: 'zh-CN' | 'en-US' = language === 'en' ? 'en-US' : 'zh-CN';
   const REMINDER_OPTIONS = [
     { label: t('noReminder'), value: '' },
     { label: t('reminder5min'), value: '5' },
@@ -72,6 +73,7 @@ export function EventEditorPanel({
 
   const { supported: micSupported, listening, start: startMic, stop: stopMic } =
     useSpeechRecognition({
+      lang: nlpLang,
       onResult: (text) => {
         if (text) setNlpInput((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text));
       },
@@ -119,7 +121,7 @@ export function EventEditorPanel({
     const text = nlpInput.trim();
     if (!text) { setParsed(null); return; }
     let cancelled = false;
-    void parseVoiceCommandWithLLM(text, 'zh-CN', defaultStartAt ?? new Date(), timezone)
+    void parseVoiceCommandWithLLM(text, nlpLang, defaultStartAt ?? new Date(), timezone)
       .then(result => { if (!cancelled) setParsed(result); });
     return () => { cancelled = true; };
   }, [nlpInput]);
@@ -336,9 +338,9 @@ export function EventEditorPanel({
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-500 w-10 flex-shrink-0">{t('timeLabel')}</span>
                     <span className="text-sm text-gray-800">
-                      {formatDateCN(startDate)} {formatTimeCN(startDate)}
+                      {formatDate(startDate, language)} {formatTime(startDate, language)}
                       {endDate && (
-                        <span className="text-gray-500"> — {formatTimeCN(endDate)}</span>
+                        <span className="text-gray-500"> — {formatTime(endDate, language)}</span>
                       )}
                     </span>
                   </div>

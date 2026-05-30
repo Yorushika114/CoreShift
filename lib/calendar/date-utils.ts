@@ -52,6 +52,20 @@ export function formatTimeCN(date: Date): string {
   return `${period}${h}:${minutes}`;
 }
 
+export function formatDate(date: Date, lang: 'zh' | 'en'): string {
+  if (lang === 'en') {
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  }
+  return formatDateCN(date);
+}
+
+export function formatTime(date: Date, lang: 'zh' | 'en'): string {
+  if (lang === 'en') {
+    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  }
+  return formatTimeCN(date);
+}
+
 // Uses local time to avoid UTC-offset issues in China (UTC+8)
 export function toISODateString(date: Date): string {
   const y = date.getFullYear();
