@@ -54,7 +54,7 @@ export function SettingsPanel({ googleConnected, syncing, syncMsg, onSync }: Set
 
   function handleFileUpload(file: File) {
     setBgError(null);
-    if (file.size > 2 * 1024 * 1024) {
+    if (file.size > 20 * 1024 * 1024) {
       setBgError(t('bgTooLarge'));
       return;
     }
