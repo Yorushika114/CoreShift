@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { parseVoiceCommand } from '@/lib/voice/parseVoiceCommand';
+import { parseVoiceCommandWithLLM } from '@/lib/voice/parseVoiceCommand';
 import { useSpeechRecognition } from '@/lib/voice/useSpeechRecognition';
 import { formatDateCN, formatTimeCN } from '@/lib/calendar/date-utils';
 import { EVENT_COLOR_OPTIONS } from '@/lib/calendar/color-utils';
@@ -115,8 +115,12 @@ export function EventEditorPanel({
   }, []);
 
   useEffect(() => {
-    if (!nlpInput.trim()) { setParsed(null); return; }
-    setParsed(parseVoiceCommand(nlpInput.trim(), defaultStartAt ?? new Date()));
+    const text = nlpInput.trim();
+    if (!text) { setParsed(null); return; }
+    let cancelled = false;
+    void parseVoiceCommandWithLLM(text, 'zh-CN', defaultStartAt ?? new Date())
+      .then(result => { if (!cancelled) setParsed(result); });
+    return () => { cancelled = true; };
   }, [nlpInput]);
 
   // Keep end date in sync when start date changes (only if they were equal)
