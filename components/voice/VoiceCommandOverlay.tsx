@@ -71,7 +71,7 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
   const [result, setResult] = useState<Result | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [lang, setLang] = useState<'zh-CN' | 'en-US'>('zh-CN');
+  const [lang, setLang] = useState<'zh-CN' | 'en-US'>(language === 'en' ? 'en-US' : 'zh-CN');
   const [ttsEnabled, setTtsEnabled] = useState(true);
   const [summaryListOpen, setSummaryListOpen] = useState(false);
   const { supported, listening, interimText, error, start, stop } = useSpeechRecognition({
