@@ -79,7 +79,13 @@ export async function POST(req: NextRequest) {
     const content = data.choices?.[0]?.message?.content;
     if (!content) return new Response('Empty LLM response', { status: 502 });
 
-    const parsed = JSON.parse(content) as Record<string, unknown>;
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(content) as Record<string, unknown>;
+    } catch {
+      console.error('[LLM parse] malformed JSON from LLM:', content);
+      return new Response('Invalid JSON from LLM', { status: 502 });
+    }
     if (!Array.isArray(parsed.ambiguities)) parsed.ambiguities = [];
 
     return Response.json(parsed);
