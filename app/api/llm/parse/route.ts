@@ -30,6 +30,7 @@ Use null for missing optional fields — never write the word "undefined":
 Rules:
 - All datetime fields must be absolute ISO 8601 strings (e.g. "2026-05-30T15:00:00.000Z")
 - For "query" intent: set queryRangeStart and queryRangeEnd to cover the range the user asks about. If no range specified, use today (00:00 to 23:59)
+- For "summarize" intent: use when the user asks to summarize, review, or analyze their schedule (e.g. "总结这周行程", "analyze my week", "give me a summary of today"). Set queryRangeStart and queryRangeEnd to cover the requested range. Leave title/startAt/endAt/reminderAt as null.
 - ambiguities: list any assumptions made (e.g. "No date mentioned, defaulted to today"). Use the same language as the user's input
 - clarificationQuestion: only set if title is completely unidentifiable. Use the same language as the user's input
 - Output language for all text fields must match the user's input language`;
