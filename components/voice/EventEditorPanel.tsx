@@ -111,6 +111,7 @@ export function EventEditorPanel({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [seriesDeleteMode, setSeriesDeleteMode] = useState<'single' | 'future' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -224,18 +225,20 @@ export function EventEditorPanel({
     }
   }
 
-  async function handleDelete() {
+  async function handleDelete(mode?: 'future') {
     if (!event) return;
     setDeleting(true);
     setError(null);
     try {
-      const res = await fetch(`/api/events/${event.id}`, { method: 'DELETE' });
+      const url = mode ? `/api/events/${event.id}?mode=future` : `/api/events/${event.id}`;
+      const res = await fetch(url, { method: 'DELETE' });
       if (!res.ok) throw new Error('删除失败');
       onDeleted?.(event.id);
     } catch {
       setError(t('deleteFailed'));
       setDeleting(false);
       setConfirmDelete(false);
+      setSeriesDeleteMode(null);
     }
   }
 
@@ -512,18 +515,45 @@ export function EventEditorPanel({
                 {t('delete')}{event?.recurrence ? t('deleteSeriesSuffix') : ''}
               </button>
             )}
-            {isEdit && confirmDelete && (
+            {isEdit && confirmDelete && !seriesDeleteMode && event?.icsSeriesUid && (
+              <div className="flex flex-col gap-1.5">
+                <span className="text-xs text-gray-500">
+                  {language === 'zh' ? '删除循环事件的范围：' : 'Delete recurring event:'}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setSeriesDeleteMode('single')}
+                    className="text-xs text-white bg-red-500 hover:bg-red-600 px-2.5 py-1 rounded-full transition"
+                  >
+                    {language === 'zh' ? '只删这一条' : 'Only this'}
+                  </button>
+                  <button
+                    onClick={() => setSeriesDeleteMode('future')}
+                    className="text-xs border border-red-400 text-red-500 hover:bg-red-50 px-2.5 py-1 rounded-full transition"
+                  >
+                    {language === 'zh' ? '这条及之后所有' : 'This & future'}
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete(false)}
+                    className="text-xs text-gray-500 hover:text-gray-700 transition"
+                  >
+                    {t('cancel')}
+                  </button>
+                </div>
+              </div>
+            )}
+            {isEdit && confirmDelete && (seriesDeleteMode || !event?.icsSeriesUid) && (
               <div className="flex items-center gap-2">
                 <span className="text-xs text-gray-500">{t('confirmDelete')}</span>
                 <button
-                  onClick={handleDelete}
+                  onClick={() => handleDelete(seriesDeleteMode === 'future' ? 'future' : undefined)}
                   disabled={deleting}
                   className="text-sm text-white bg-red-500 hover:bg-red-600 px-3 py-1 rounded-full transition disabled:opacity-50"
                 >
                   {deleting ? t('deleting') : t('confirm')}
                 </button>
                 <button
-                  onClick={() => setConfirmDelete(false)}
+                  onClick={() => { setConfirmDelete(false); setSeriesDeleteMode(null); }}
                   className="text-sm text-gray-500 hover:text-gray-700 transition"
                 >
                   {t('cancel')}
