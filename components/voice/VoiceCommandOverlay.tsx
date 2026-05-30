@@ -55,7 +55,7 @@ async function fetchRange([start, end]: [Date, Date]): Promise<CalendarEvent[]> 
 }
 
 export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, onClose }: Props) {
-  const { t, language } = useSettings();
+  const { t, language, timezone } = useSettings();
   const ERROR_MESSAGES: Record<SpeechErrorKind, string> = {
     unsupported: language === 'zh' ? '当前浏览器不支持语音识别' : 'Voice recognition not supported in this browser',
     'not-allowed': language === 'zh' ? '麦克风权限被拒绝，请改用文字输入' : 'Microphone access denied, please use text input',
@@ -74,8 +74,6 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
   const [lang, setLang] = useState<'zh-CN' | 'en-US'>('zh-CN');
   const [ttsEnabled, setTtsEnabled] = useState(true);
   const [summaryListOpen, setSummaryListOpen] = useState(false);
-  const { timezone } = useSettings();
-
   const { supported, listening, interimText, error, start, stop } = useSpeechRecognition({
     lang,
     onResult: (text) => { if (text) void handleCommand(text); },
@@ -189,7 +187,10 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
           ? (await summaryRes.json() as { summary: string })
           : { summary: lang === 'en-US' ? 'Could not generate summary.' : '摘要生成失败。' };
 
-        setResult({ kind: 'summarize', summary, events, rangeLabel: '' });
+        const rangeLabel = parsed.queryRangeStart
+          ? new Date(parsed.queryRangeStart).toLocaleDateString(lang === 'en-US' ? 'en-US' : 'zh-CN', { month: 'short', day: 'numeric' })
+          : '';
+        setResult({ kind: 'summarize', summary, events, rangeLabel });
         if (ttsEnabled) speak(summary);
         return;
       }
@@ -430,6 +431,7 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
                   </p>
                   <button
                     onClick={() => setTtsEnabled(v => !v)}
+                    aria-pressed={ttsEnabled}
                     className={`text-xs px-2 py-0.5 rounded-full border transition ${
                       ttsEnabled
                         ? 'border-blue-300 text-blue-500 bg-blue-50'
@@ -449,6 +451,7 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
                   <div>
                     <button
                       onClick={() => setSummaryListOpen(v => !v)}
+                      aria-expanded={summaryListOpen}
                       className="text-xs text-gray-400 hover:text-gray-600 transition flex items-center gap-1 mt-2"
                     >
                       <span>{summaryListOpen ? '▾' : '▸'}</span>
