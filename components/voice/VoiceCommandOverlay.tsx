@@ -71,6 +71,7 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
   const [actionError, setActionError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [lang, setLang] = useState<'zh-CN' | 'en-US'>('zh-CN');
+  const { timezone } = useSettings();
 
   const { supported, listening, interimText, error, start, stop } = useSpeechRecognition({
     lang,
@@ -106,7 +107,7 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
 
     setBusy(true);
     try {
-      const parsed = await parseVoiceCommandWithLLM(text, lang);
+      const parsed = await parseVoiceCommandWithLLM(text, lang, new Date(), timezone);
 
       if (parsed.intent === 'create' || parsed.intent === 'unknown') {
         if (parsed.ambiguities.length > 0) {

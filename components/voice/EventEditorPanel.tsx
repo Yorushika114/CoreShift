@@ -63,6 +63,7 @@ export function EventEditorPanel({
   ];
   const isEdit = !!event;
   const [tab, setTab] = useState<Tab>(isEdit ? 'manual' : 'quick');
+  const { timezone } = useSettings();
 
   // quick tab state
   const [nlpInput, setNlpInput] = useState(initialText ?? '');
@@ -118,7 +119,7 @@ export function EventEditorPanel({
     const text = nlpInput.trim();
     if (!text) { setParsed(null); return; }
     let cancelled = false;
-    void parseVoiceCommandWithLLM(text, 'zh-CN', defaultStartAt ?? new Date())
+    void parseVoiceCommandWithLLM(text, 'zh-CN', defaultStartAt ?? new Date(), timezone)
       .then(result => { if (!cancelled) setParsed(result); });
     return () => { cancelled = true; };
   }, [nlpInput]);

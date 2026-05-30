@@ -130,9 +130,12 @@ type LLMParsedCommand = ParsedCommand & {
 export async function parseVoiceCommandWithLLM(
   text: string,
   lang: 'zh-CN' | 'en-US' = 'zh-CN',
-  fallbackDate: Date = new Date()
+  fallbackDate: Date = new Date(),
+  tz?: string
 ): Promise<LLMParsedCommand> {
   try {
+    const resolvedTz = tz
+      ?? (typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'Asia/Shanghai');
     const res = await fetch('/api/llm/parse', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -140,9 +143,7 @@ export async function parseVoiceCommandWithLLM(
         text,
         lang,
         now: fallbackDate.toISOString(),
-        tz: typeof Intl !== 'undefined'
-          ? Intl.DateTimeFormat().resolvedOptions().timeZone
-          : 'Asia/Shanghai',
+        tz: resolvedTz,
       }),
     });
     if (!res.ok) throw new Error(`LLM parse failed: ${res.status}`);
