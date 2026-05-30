@@ -81,6 +81,11 @@ describe('/api/llm/schedule-summary', () => {
     });
     const res = await POST(req as never);
     expect(res.status).toBe(200);
+    // Verify the event title was included in the upstream request body
+    const upstreamBody = JSON.parse((mockFetch.mock.calls[0][1] as RequestInit).body as string) as { messages: { role: string; content: string }[] };
+    const userMsg = upstreamBody.messages.find(m => m.role === 'user')?.content ?? '';
+    expect(userMsg).toContain('组会');
+    expect(userMsg).toContain('算法课');
     const body = await res.json() as { summary: string };
     expect(body.summary).toBe('本周你有2个安排，比较轻松。');
   });
@@ -108,8 +113,15 @@ describe('/api/llm/schedule-summary', () => {
   it('returns 502 when upstream fails', async () => {
     mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
     const { POST } = await import('@/app/api/llm/schedule-summary/route');
-    const req = makeRequest({ events: [], lang: 'zh-CN', rangeStart: '', rangeEnd: '' });
+    const req = makeRequest({ events: [], lang: 'zh-CN', rangeStart: '2026-05-26T00:00:00.000Z', rangeEnd: '2026-06-01T23:59:59.999Z' });
     const res = await POST(req as never);
     expect(res.status).toBe(502);
+  });
+
+  it('returns 400 when rangeStart or rangeEnd is missing', async () => {
+    const { POST } = await import('@/app/api/llm/schedule-summary/route');
+    const req = makeRequest({ events: [], lang: 'zh-CN', rangeStart: '', rangeEnd: '' });
+    const res = await POST(req as never);
+    expect(res.status).toBe(400);
   });
 });

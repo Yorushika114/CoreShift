@@ -17,6 +17,10 @@ export async function POST(req: NextRequest | Request) {
     return new Response('LLM not configured', { status: 503 });
   }
 
+  if (typeof rangeStart !== 'string' || !rangeStart || typeof rangeEnd !== 'string' || !rangeEnd) {
+    return new Response('Missing rangeStart or rangeEnd', { status: 400 });
+  }
+
   const eventList = Array.isArray(events) ? (events as CalendarEvent[]) : [];
   const tzStr = typeof tz === 'string' ? tz : 'Asia/Shanghai';
   const isEn = lang === 'en-US';
@@ -62,7 +66,7 @@ Rules:
 - 口语化自然，不要写成列表
 - 如果没有安排：友好地告知，并鼓励用户`;
 
-  const rangeDesc = `${rangeStart ?? ''} to ${rangeEnd ?? ''}`;
+  const rangeDesc = `${rangeStart ?? '?'} to ${rangeEnd ?? '?'}`;
   const userMessage = isEn
     ? `Please summarize my schedule.\n\nEvents (${rangeDesc}):\n${eventsText}`
     : `请总结我的日程安排。\n\n安排（${rangeDesc}）：\n${eventsText}`;
