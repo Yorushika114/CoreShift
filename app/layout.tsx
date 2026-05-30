@@ -30,7 +30,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="zh">
-      <body className={inter.className}>{children}</body>
+      <body className={inter.className}>
+        {process.env.NODE_ENV === 'development' && (
+          <script dangerouslySetInnerHTML={{
+            __html: `if('serviceWorker'in navigator)navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(s){s.unregister()})});`
+          }} />
+        )}
+        {children}
+      </body>
     </html>
   )
 }
