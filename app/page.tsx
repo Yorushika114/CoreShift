@@ -75,27 +75,42 @@ function CalendarPageInner() {
   }
 
   const fetchEvents = useCallback(async (date: Date, currentView: ViewMode) => {
-    setLoading(true);
+    let start: Date, end: Date;
+    if (currentView === 'year') {
+      start = new Date(date.getFullYear(), 0, 1);
+      end = new Date(date.getFullYear(), 11, 31, 23, 59, 59);
+    } else if (currentView === 'month') {
+      start = new Date(date.getFullYear(), date.getMonth(), 1);
+      end = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59);
+    } else if (currentView === 'week') {
+      const ws = getWeekStart(date);
+      start = ws;
+      end = new Date(ws.getTime() + 7 * 24 * 60 * 60 * 1000 - 1);
+    } else {
+      start = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
+      end = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
+    }
+
+    // Stale-while-revalidate：先从 localStorage 渲染缓存，再后台刷新
+    const cacheKey = 'coreshift_events_cache';
     try {
-      let start: Date, end: Date;
-      if (currentView === 'year') {
-        start = new Date(date.getFullYear(), 0, 1);
-        end = new Date(date.getFullYear(), 11, 31, 23, 59, 59);
-      } else if (currentView === 'month') {
-        start = new Date(date.getFullYear(), date.getMonth(), 1);
-        end = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59);
-      } else if (currentView === 'week') {
-        const ws = getWeekStart(date);
-        start = ws;
-        end = new Date(ws.getTime() + 7 * 24 * 60 * 60 * 1000 - 1);
-      } else {
-        start = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
-        end = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        setEvents(JSON.parse(cached));
+        setLoading(false);
       }
+    } catch {}
+
+    try {
+      setLoading(true);
       const res = await fetch(
         `/api/events?start=${start.toISOString()}&end=${end.toISOString()}`
       );
-      if (res.ok) setEvents(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        setEvents(data);
+        try { localStorage.setItem(cacheKey, JSON.stringify(data)); } catch {}
+      }
     } finally {
       setLoading(false);
     }
