@@ -124,7 +124,7 @@ export function EventEditorPanel({
     void parseVoiceCommandWithLLM(text, nlpLang, defaultStartAt ?? new Date(), timezone)
       .then(result => { if (!cancelled) setParsed(result); });
     return () => { cancelled = true; };
-  }, [nlpInput]);
+  }, [defaultStartAt, nlpInput, nlpLang, timezone]);
 
   // Keep end date in sync when start date changes (only if they were equal)
   function handleManualDateChange(val: string) {
