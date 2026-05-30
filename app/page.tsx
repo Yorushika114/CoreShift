@@ -77,6 +77,16 @@ function CalendarPageInner() {
     }
   }
 
+  async function handleDisconnect(deleteEvents: boolean) {
+    await fetch('/api/auth/google/disconnect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deleteEvents }),
+    });
+    setGoogleConnected(false);
+    fetchEvents(viewDate, view);
+  }
+
   const fetchEvents = useCallback(async (date: Date, currentView: ViewMode) => {
     let start: Date, end: Date;
     if (currentView === 'year') {
@@ -354,6 +364,7 @@ function CalendarPageInner() {
             syncing={syncing}
             syncMsg={syncMsg}
             onSync={handleSync}
+            onDisconnect={handleDisconnect}
           />
         </div>
       </aside>
