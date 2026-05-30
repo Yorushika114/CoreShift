@@ -87,7 +87,7 @@ function YearPanel({ year, eventDates, isCenter, onMonthClick, onReachBottom, on
                         'w-5 h-5 flex items-center justify-center text-xs rounded-full',
                         !inMonth && 'text-gray-300',
                         inMonth && !today && 'text-gray-700',
-                        today && 'bg-blue-600 text-white font-bold',
+                        today && inMonth && 'bg-blue-600 text-white font-bold',
                       ].filter(Boolean).join(' ')}>
                         {day.getDate()}
                       </div>
