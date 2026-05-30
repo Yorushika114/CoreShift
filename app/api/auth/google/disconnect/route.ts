@@ -8,13 +8,8 @@ export async function POST(request: NextRequest) {
 
   if (deleteEvents) {
     await prisma.event.deleteMany({ where: { googleEventId: { not: null } } });
-  } else {
-    // 保留事件，清除 googleEventId 让它们变成纯本地事件
-    await prisma.event.updateMany({
-      where: { googleEventId: { not: null } },
-      data: { googleEventId: null, googleUpdatedAt: null },
-    });
   }
+  // 保留事件时不清除 googleEventId——重连后 syncFromGoogle 可用此字段去重，避免产生重复事件
 
   return NextResponse.json({ ok: true });
 }
