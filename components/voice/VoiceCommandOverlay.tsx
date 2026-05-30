@@ -346,7 +346,11 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-500 w-10 flex-shrink-0">{t('titleLabel')}</span>
                     <span className="text-sm text-gray-800 font-medium">
-                      {result.parsed.title ?? <span className="text-amber-500 italic">（未识别）</span>}
+                      {result.parsed.title ?? (
+                        <span className="text-amber-500 italic">
+                          {lang === 'zh-CN' ? '（未识别）' : '(not recognized)'}
+                        </span>
+                      )}
                     </span>
                   </div>
                   {result.parsed.startAt && (
