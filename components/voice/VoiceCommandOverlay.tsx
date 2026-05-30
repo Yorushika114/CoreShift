@@ -322,7 +322,7 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
     >
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 overflow-y-auto max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <span className="text-sm font-medium text-gray-700">🎙 {t('voiceInput')}</span>
