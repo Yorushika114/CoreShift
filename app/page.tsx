@@ -119,12 +119,17 @@ function CalendarPageInner() {
   useEffect(() => {
     reminderService.requestPermission();
     return reminderService.onFire((event) => {
-      const timeStr = new Date(event.startAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+      const locale = language === 'en' ? 'en-US' : 'zh-CN';
+      const timeStr = new Date(event.startAt).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
       const toast = { id: event.id + Date.now(), title: event.title, timeStr };
       setReminderToasts(prev => [...prev, toast]);
       setTimeout(() => setReminderToasts(prev => prev.filter(t => t.id !== toast.id)), 8000);
     });
-  }, []);
+  }, [language]);
+
+  useEffect(() => {
+    reminderService.setLang(language);
+  }, [language]);
 
   useEffect(() => {
     fetchEvents(viewDate, view);

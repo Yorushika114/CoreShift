@@ -191,7 +191,7 @@ export function WeekView({
                 className="text-xs text-gray-600 whitespace-nowrap"
                 style={{ textShadow: '0 0 4px #fff, 0 0 8px #fff' }}
               >
-                {formatTimeSlot(hour, 0, use24h)}
+                {formatTimeSlot(hour, 0, use24h, language)}
               </span>
             </div>
           ))}
@@ -260,7 +260,7 @@ export function WeekView({
                     </div>
                     {!isShort && (
                       <div className="text-xs opacity-80">
-                        {formatTimeSlot(start.getHours(), start.getMinutes(), use24h)}
+                        {formatTimeSlot(start.getHours(), start.getMinutes(), use24h, language)}
                       </div>
                     )}
                   </div>
