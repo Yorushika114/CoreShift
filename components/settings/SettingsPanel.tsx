@@ -3,23 +3,23 @@
 import { useState, useRef } from 'react';
 import { useSettings } from '@/contexts/SettingsContext';
 
-const TIMEZONES = [
-  { value: 'Asia/Shanghai',       label: 'Asia/Shanghai (UTC+8)' },
-  { value: 'Asia/Tokyo',          label: 'Asia/Tokyo (UTC+9)' },
-  { value: 'Asia/Seoul',          label: 'Asia/Seoul (UTC+9)' },
-  { value: 'Asia/Singapore',      label: 'Asia/Singapore (UTC+8)' },
-  { value: 'Asia/Kolkata',        label: 'Asia/Kolkata (UTC+5:30)' },
-  { value: 'Europe/London',       label: 'Europe/London (UTC+0/+1)' },
-  { value: 'Europe/Paris',        label: 'Europe/Paris (UTC+1/+2)' },
-  { value: 'Europe/Berlin',       label: 'Europe/Berlin (UTC+1/+2)' },
-  { value: 'America/New_York',    label: 'America/New_York (UTC-5/-4)' },
-  { value: 'America/Chicago',     label: 'America/Chicago (UTC-6/-5)' },
-  { value: 'America/Denver',      label: 'America/Denver (UTC-7/-6)' },
-  { value: 'America/Los_Angeles', label: 'America/Los_Angeles (UTC-8/-7)' },
-  { value: 'America/Sao_Paulo',   label: 'America/Sao_Paulo (UTC-3)' },
-  { value: 'Africa/Cairo',        label: 'Africa/Cairo (UTC+2)' },
-  { value: 'UTC',                 label: 'UTC' },
-];
+const TZ_LABELS: Record<string, { zh: string; en: string }> = {
+  'Asia/Shanghai':       { zh: '中国 — 上海/北京 (UTC+8)',         en: 'China — Shanghai/Beijing (UTC+8)' },
+  'Asia/Tokyo':          { zh: '日本 — 东京 (UTC+9)',               en: 'Japan — Tokyo (UTC+9)' },
+  'Asia/Seoul':          { zh: '韩国 — 首尔 (UTC+9)',               en: 'South Korea — Seoul (UTC+9)' },
+  'Asia/Singapore':      { zh: '新加坡 (UTC+8)',                    en: 'Singapore (UTC+8)' },
+  'Asia/Kolkata':        { zh: '印度 — 加尔各答 (UTC+5:30)',        en: 'India — Kolkata (UTC+5:30)' },
+  'Europe/London':       { zh: '英国 — 伦敦 (UTC+0/+1)',            en: 'UK — London (UTC+0/+1)' },
+  'Europe/Paris':        { zh: '法国 — 巴黎 (UTC+1/+2)',            en: 'France — Paris (UTC+1/+2)' },
+  'Europe/Berlin':       { zh: '德国 — 柏林 (UTC+1/+2)',            en: 'Germany — Berlin (UTC+1/+2)' },
+  'America/New_York':    { zh: '美国 — 纽约 (UTC-5/-4)',            en: 'USA — New York (UTC-5/-4)' },
+  'America/Chicago':     { zh: '美国 — 芝加哥 (UTC-6/-5)',          en: 'USA — Chicago (UTC-6/-5)' },
+  'America/Denver':      { zh: '美国 — 丹佛 (UTC-7/-6)',            en: 'USA — Denver (UTC-7/-6)' },
+  'America/Los_Angeles': { zh: '美国 — 洛杉矶 (UTC-8/-7)',          en: 'USA — Los Angeles (UTC-8/-7)' },
+  'America/Sao_Paulo':   { zh: '巴西 — 圣保罗 (UTC-3)',             en: 'Brazil — São Paulo (UTC-3)' },
+  'Africa/Cairo':        { zh: '埃及 — 开罗 (UTC+2)',               en: 'Egypt — Cairo (UTC+2)' },
+  'UTC':                 { zh: 'UTC（协调世界时）',                  en: 'UTC (Coordinated Universal Time)' },
+};
 
 interface SettingsPanelProps {
   googleConnected: boolean;
@@ -30,6 +30,10 @@ interface SettingsPanelProps {
 
 export function SettingsPanel({ googleConnected, syncing, syncMsg, onSync }: SettingsPanelProps) {
   const { use24h, language, timezone, bgType, bgValue, setUse24h, setLanguage, setTimezone, setBg, t } = useSettings();
+  const TIMEZONES = Object.entries(TZ_LABELS).map(([value, labels]) => ({
+    value,
+    label: labels[language],
+  }));
   const [open, setOpen] = useState(false);
   const [bgUrlInput, setBgUrlInput] = useState(bgType === 'url' ? bgValue : '');
   const [bgError, setBgError] = useState<string | null>(null);
