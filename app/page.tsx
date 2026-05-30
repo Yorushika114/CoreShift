@@ -14,6 +14,7 @@ import { EventEditorPanel } from '@/components/voice/EventEditorPanel';
 import { VoiceCommandOverlay } from '@/components/voice/VoiceCommandOverlay';
 import { SettingsPanel } from '@/components/settings/SettingsPanel';
 import { SettingsProvider, useSettings } from '@/contexts/SettingsContext';
+import { WEEK_HEADERS_FULL } from '@/lib/i18n';
 import { reminderService } from '@/lib/reminder/reminderService';
 import { formatMonthYear, formatDayTitle, getWeekStart } from '@/lib/calendar/date-utils';
 import { expandEvents, realEventId } from '@/lib/calendar/recurrence';
@@ -21,12 +22,7 @@ import type { CalendarEvent } from '@/types';
 
 type ViewMode = 'year' | 'month' | 'week' | 'day';
 
-const VIEW_TABS: { label: string; value: ViewMode }[] = [
-  { label: '年', value: 'year' },
-  { label: '月', value: 'month' },
-  { label: '周', value: 'week' },
-  { label: '日', value: 'day' },
-];
+const VIEW_TAB_VALUES: ViewMode[] = ['year', 'month', 'week', 'day'];
 
 interface EditorState {
   open: boolean;
@@ -36,7 +32,7 @@ interface EditorState {
 }
 
 function CalendarPageInner() {
-  const { bgType, bgValue } = useSettings();
+  const { bgType, bgValue, t, language } = useSettings();
   const [view, setView] = useState<ViewMode>('week');
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [viewDate, setViewDate] = useState(() => new Date());
@@ -63,13 +59,15 @@ function CalendarPageInner() {
       const res = await fetch('/api/sync', { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
-        setSyncMsg(`同步完成：拉取 ${data.pulled} 个，推送 ${data.pushed} 个`);
+        setSyncMsg(language === 'zh'
+          ? `同步完成：拉取 ${data.pulled} 个，推送 ${data.pushed} 个`
+          : `Sync done: pulled ${data.pulled}, pushed ${data.pushed}`);
         fetchEvents(viewDate, view);
       } else {
-        setSyncMsg('同步失败，请重试');
+        setSyncMsg(language === 'zh' ? '同步失败，请重试' : 'Sync failed, please retry');
       }
     } catch {
-      setSyncMsg('同步失败，请检查网络');
+      setSyncMsg(language === 'zh' ? '同步失败，请检查网络' : 'Sync failed, check your network');
     } finally {
       setSyncing(false);
       setTimeout(() => setSyncMsg(null), 4000);
@@ -249,7 +247,21 @@ function CalendarPageInner() {
   }
 
   function getNavTitle(): string {
-    if (view === 'year') return `${viewDate.getFullYear()}年`;
+    if (language === 'en') {
+      const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      if (view === 'year') return `${viewDate.getFullYear()}`;
+      if (view === 'month') return `${MONTHS_EN[viewDate.getMonth()]} ${viewDate.getFullYear()}`;
+      if (view === 'week') {
+        const ws = getWeekStart(viewDate);
+        const we = new Date(ws.getTime() + 6 * 24 * 60 * 60 * 1000);
+        if (ws.getMonth() === we.getMonth())
+          return `${MONTHS_EN[ws.getMonth()]} ${ws.getDate()} – ${we.getDate()}, ${ws.getFullYear()}`;
+        return `${MONTHS_EN[ws.getMonth()]} ${ws.getDate()} – ${MONTHS_EN[we.getMonth()]} ${we.getDate()}`;
+      }
+      const DAYS_EN = WEEK_HEADERS_FULL.en;
+      return `${MONTHS_EN[viewDate.getMonth()]} ${viewDate.getDate()}, ${viewDate.getFullYear()} ${DAYS_EN[viewDate.getDay()]}`;
+    }
+    if (view === 'year') return `${viewDate.getFullYear()}${t('yearSuffix')}`;
     if (view === 'month') return formatMonthYear(viewDate);
     if (view === 'week') {
       const ws = getWeekStart(viewDate);
@@ -261,8 +273,8 @@ function CalendarPageInner() {
     return formatDayTitle(viewDate);
   }
 
-  const prevLabel = view === 'year' ? '上一年' : view === 'month' ? '上个月' : view === 'week' ? '上一周' : '前一天';
-  const nextLabel = view === 'year' ? '下一年' : view === 'month' ? '下个月' : view === 'week' ? '下一周' : '后一天';
+  const prevLabel = view === 'year' ? t('prevYear') : view === 'month' ? t('prevMonth') : view === 'week' ? t('prevWeek') : t('prevDay');
+  const nextLabel = view === 'year' ? t('nextYear') : view === 'month' ? t('nextMonth') : view === 'week' ? t('nextWeek') : t('nextDay');
 
   return (
     <div className="flex h-screen bg-white font-sans">
@@ -278,14 +290,14 @@ function CalendarPageInner() {
             onClick={goToToday}
             className="text-sm border border-gray-300 rounded-full px-4 py-1.5 hover:bg-gray-50 text-gray-600 transition-colors"
           >
-            今天
+            {t('today')}
           </button>
           <button
             onClick={() => openCreateEditor()}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-white bg-blue-500 hover:bg-blue-600 rounded-full transition shadow-sm"
           >
             <span className="text-base leading-none">+</span>
-            新建
+            {t('newBtn')}
           </button>
         </div>
 
@@ -304,7 +316,7 @@ function CalendarPageInner() {
             className="flex items-center justify-center gap-2 border border-gray-200 rounded-lg p-3 text-sm text-gray-600 hover:bg-gray-50 hover:border-blue-300 transition"
           >
             <span className="text-base">🎙</span>
-            语音输入
+            {t('voiceInput')}
           </button>
 
           <SettingsPanel
@@ -325,7 +337,7 @@ function CalendarPageInner() {
             : undefined
         }
       >
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-200 flex-shrink-0">
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-200 flex-shrink-0 bg-white/90 backdrop-blur-sm">
           <button
             onClick={goPrev}
             className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500"
@@ -379,22 +391,22 @@ function CalendarPageInner() {
             )}
           </div>
           {loading && (
-            <span className="text-xs text-gray-400 animate-pulse">加载中…</span>
+            <span className="text-xs text-gray-400 animate-pulse">{t('loading')}</span>
           )}
 
           {/* View tabs */}
           <div className="flex border border-gray-200 rounded-lg overflow-hidden">
-            {VIEW_TABS.map(tab => (
+            {VIEW_TAB_VALUES.map(v => (
               <button
-                key={tab.value}
-                onClick={() => { setView(tab.value); setShowYearPicker(false); }}
+                key={v}
+                onClick={() => { setView(v); setShowYearPicker(false); }}
                 className={`px-3 py-1 text-sm transition-colors ${
-                  view === tab.value
+                  view === v
                     ? 'bg-blue-600 text-white'
                     : 'text-gray-600 hover:bg-gray-100'
                 }`}
               >
-                {tab.label}
+                {t(v as 'year' | 'month' | 'week' | 'day')}
               </button>
             ))}
           </div>
@@ -460,18 +472,18 @@ function CalendarPageInner() {
 
       {/* Reminder toasts */}
       <div className="fixed bottom-6 right-6 flex flex-col gap-2 z-[100]">
-        {reminderToasts.map(t => (
+        {reminderToasts.map(toast => (
           <div
-            key={t.id}
+            key={toast.id}
             className="flex items-start gap-3 bg-white border border-blue-200 shadow-lg rounded-xl px-4 py-3 w-72 animate-fade-in"
           >
             <span className="text-xl">🔔</span>
             <div>
-              <p className="text-sm font-medium text-gray-800">{t.title}</p>
-              <p className="text-xs text-gray-500 mt-0.5">活动将于 {t.timeStr} 开始</p>
+              <p className="text-sm font-medium text-gray-800">{toast.title}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{t('eventStartPrefix')} {toast.timeStr} {t('eventStartSuffix')}</p>
             </div>
             <button
-              onClick={() => setReminderToasts(prev => prev.filter(x => x.id !== t.id))}
+              onClick={() => setReminderToasts(prev => prev.filter(x => x.id !== toast.id))}
               className="ml-auto text-gray-400 hover:text-gray-600 text-lg leading-none flex-shrink-0"
             >×</button>
           </div>

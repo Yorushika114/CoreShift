@@ -8,8 +8,8 @@ import {
   isToday,
   formatMonthYear,
 } from '@/lib/calendar/date-utils';
-
-const WEEK_DAYS = ['日', '一', '二', '三', '四', '五', '六'];
+import { useSettings } from '@/contexts/SettingsContext';
+import { WEEK_HEADERS_MINI } from '@/lib/i18n';
 
 interface MiniCalendarProps {
   selectedDate: Date;
@@ -17,6 +17,8 @@ interface MiniCalendarProps {
 }
 
 export function MiniCalendar({ selectedDate, onDateSelect }: MiniCalendarProps) {
+  const { t, language } = useSettings();
+  const weekDaysMini = WEEK_HEADERS_MINI[language];
   const [viewDate, setViewDate] = useState(
     () => new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1)
   );
@@ -38,7 +40,7 @@ export function MiniCalendar({ selectedDate, onDateSelect }: MiniCalendarProps) 
       <div className="flex items-center justify-between mb-2">
         <button
           onClick={prevMonth}
-          aria-label="上个月"
+          aria-label={t('prevMonth')}
           className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 text-sm"
         >
           ‹
@@ -48,7 +50,7 @@ export function MiniCalendar({ selectedDate, onDateSelect }: MiniCalendarProps) 
         </span>
         <button
           onClick={nextMonth}
-          aria-label="下个月"
+          aria-label={t('nextMonth')}
           className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 text-sm"
         >
           ›
@@ -56,8 +58,8 @@ export function MiniCalendar({ selectedDate, onDateSelect }: MiniCalendarProps) 
       </div>
 
       <div className="grid grid-cols-7 mb-1">
-        {WEEK_DAYS.map(d => (
-          <div key={d} className="text-center text-xs text-gray-400 py-0.5">
+        {weekDaysMini.map((d, i) => (
+          <div key={i} className="text-center text-xs text-gray-400 py-0.5">
             {d}
           </div>
         ))}

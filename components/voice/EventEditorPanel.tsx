@@ -5,6 +5,7 @@ import { parseVoiceCommand } from '@/lib/voice/parseVoiceCommand';
 import { useSpeechRecognition } from '@/lib/voice/useSpeechRecognition';
 import { formatDateCN, formatTimeCN } from '@/lib/calendar/date-utils';
 import { EVENT_COLOR_OPTIONS } from '@/lib/calendar/color-utils';
+import { useSettings } from '@/contexts/SettingsContext';
 import type { CalendarEvent, ParsedCommand } from '@/types';
 
 interface Props {
@@ -18,23 +19,13 @@ interface Props {
 
 type Tab = 'quick' | 'manual';
 
-const REMINDER_OPTIONS = [
-  { label: '不提醒', value: '' },
-  { label: '提前 5 分钟', value: '5' },
-  { label: '提前 10 分钟', value: '10' },
-  { label: '提前 15 分钟', value: '15' },
-  { label: '提前 30 分钟', value: '30' },
-  { label: '提前 1 小时', value: '60' },
-  { label: '提前 2 小时', value: '120' },
-  { label: '提前 1 天', value: '1440' },
-];
+const REMINDER_VALUES = ['', '5', '10', '15', '30', '60', '120', '1440'];
 
 function getReminderOffset(startIso: string, reminderIso: string): string {
   const offsetMin = Math.round(
     (new Date(startIso).getTime() - new Date(reminderIso).getTime()) / 60000,
   );
-  const match = REMINDER_OPTIONS.find(o => o.value === String(offsetMin));
-  return match ? match.value : String(offsetMin);
+  return REMINDER_VALUES.find(v => v === String(offsetMin)) ?? String(offsetMin);
 }
 
 function toInputDate(iso: string | Date): string {
@@ -59,6 +50,17 @@ export function EventEditorPanel({
   onSaved,
   onDeleted,
 }: Props) {
+  const { t } = useSettings();
+  const REMINDER_OPTIONS = [
+    { label: t('noReminder'), value: '' },
+    { label: t('reminder5min'), value: '5' },
+    { label: t('reminder10min'), value: '10' },
+    { label: t('reminder15min'), value: '15' },
+    { label: t('reminder30min'), value: '30' },
+    { label: t('reminder1h'), value: '60' },
+    { label: t('reminder2h'), value: '120' },
+    { label: t('reminder1d'), value: '1440' },
+  ];
   const isEdit = !!event;
   const [tab, setTab] = useState<Tab>(isEdit ? 'manual' : 'quick');
 
@@ -148,7 +150,7 @@ export function EventEditorPanel({
       let body: Record<string, unknown>;
 
       if (tab === 'quick') {
-        if (!parsed?.startAt) { setError('请先输入事件描述'); setSaving(false); return; }
+        if (!parsed?.startAt) { setError(t('enterDescription')); setSaving(false); return; }
         body = {
           title: parsed.title || nlpInput.trim(),
           startAt: parsed.startAt,
@@ -160,8 +162,8 @@ export function EventEditorPanel({
           sourceText: nlpInput.trim(),
         };
       } else {
-        if (!manualTitle.trim()) { setError('请输入事件标题'); setSaving(false); return; }
-        if (!manualDate) { setError('请选择日期'); setSaving(false); return; }
+        if (!manualTitle.trim()) { setError(t('enterTitle')); setSaving(false); return; }
+        if (!manualDate) { setError(t('selectDate')); setSaving(false); return; }
 
         let startIso: string;
         let endIso: string | null;
@@ -170,12 +172,12 @@ export function EventEditorPanel({
           startIso = new Date(`${manualDate}T00:00:00`).toISOString();
           endIso = new Date(`${manualEndDate || manualDate}T23:59:59`).toISOString();
         } else {
-          if (!manualStart) { setError('请选择开始时间'); setSaving(false); return; }
+          if (!manualStart) { setError(t('selectStartTime')); setSaving(false); return; }
           startIso = combineDateTime(manualDate, manualStart);
           endIso = manualEnd ? combineDateTime(manualEndDate || manualDate, manualEnd) : null;
 
           if (endIso && new Date(endIso) <= new Date(startIso)) {
-            setError('结束时间必须晚于开始时间');
+            setError(t('endBeforeStart'));
             setSaving(false);
             return;
           }
@@ -210,7 +212,7 @@ export function EventEditorPanel({
       const saved: CalendarEvent = await res.json();
       onSaved(saved);
     } catch {
-      setError('保存失败，请重试');
+      setError(t('saveFailed'));
       setSaving(false);
     }
   }
@@ -224,7 +226,7 @@ export function EventEditorPanel({
       if (!res.ok) throw new Error('删除失败');
       onDeleted?.(event.id);
     } catch {
-      setError('删除失败，请重试');
+      setError(t('deleteFailed'));
       setDeleting(false);
       setConfirmDelete(false);
     }
@@ -259,7 +261,7 @@ export function EventEditorPanel({
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <span className="text-sm font-medium text-gray-700">
-            {isEdit ? '编辑事件' : '新建事件'}
+            {isEdit ? t('editEvent') : t('newEvent')}
           </span>
           <button
             onClick={onClose}
@@ -271,17 +273,17 @@ export function EventEditorPanel({
 
         {/* Tabs */}
         <div className="flex border-b border-gray-100">
-          {(['quick', 'manual'] as Tab[]).map(t => (
+          {(['quick', 'manual'] as Tab[]).map(tabVal => (
             <button
-              key={t}
-              onClick={() => handleTabChange(t)}
+              key={tabVal}
+              onClick={() => handleTabChange(tabVal)}
               className={`flex-1 py-2 text-sm transition-colors ${
-                tab === t
+                tab === tabVal
                   ? 'text-blue-600 border-b-2 border-blue-600 font-medium'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              {t === 'quick' ? '快速输入' : '手动填写'}
+              {tabVal === 'quick' ? t('quickInput') : t('manualInput')}
             </button>
           ))}
         </div>
@@ -294,7 +296,7 @@ export function EventEditorPanel({
                 ref={inputRef}
                 value={nlpInput}
                 onChange={e => setNlpInput(e.target.value)}
-                placeholder={'用自然语言描述事件\n例：明天下午3点开组会\n     下周一上午9点到10点算法课'}
+                placeholder={t('nlpPlaceholder')}
                 rows={3}
                 className="w-full resize-none text-sm text-gray-800 placeholder-gray-400 border border-gray-200 rounded-xl px-4 py-3 pr-11 focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
               />
@@ -307,8 +309,8 @@ export function EventEditorPanel({
                       ? 'bg-blue-500 text-white animate-pulse'
                       : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                   }`}
-                  aria-label={listening ? '停止语音输入' : '语音输入'}
-                  title={listening ? '停止语音输入' : '语音输入'}
+                  aria-label={listening ? t('stop') : t('voiceInput')}
+                  title={listening ? t('stop') : t('voiceInput')}
                 >
                   🎙
                 </button>
@@ -316,18 +318,18 @@ export function EventEditorPanel({
             </div>
             {parsed && nlpInput.trim() && (
               <div className="mt-3 rounded-xl bg-gray-50 border border-gray-100 px-4 py-3 space-y-1.5">
-                <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">系统理解</p>
+                <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">{t('systemUnderstanding')}</p>
                 <div className="flex items-start gap-2">
-                  <span className="text-xs text-gray-500 w-10 flex-shrink-0 pt-0.5">标题</span>
+                  <span className="text-xs text-gray-500 w-10 flex-shrink-0 pt-0.5">{t('titleLabel')}</span>
                   <span className="text-sm text-gray-800 font-medium break-words">
                     {parsed.title || (
-                      <span className="text-amber-500 italic">（未识别，将使用原文）</span>
+                      <span className="text-amber-500 italic">{t('titleNotRecognized')}</span>
                     )}
                   </span>
                 </div>
                 {startDate && (
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500 w-10 flex-shrink-0">时间</span>
+                    <span className="text-xs text-gray-500 w-10 flex-shrink-0">{t('timeLabel')}</span>
                     <span className="text-sm text-gray-800">
                       {formatDateCN(startDate)} {formatTimeCN(startDate)}
                       {endDate && (
@@ -338,15 +340,15 @@ export function EventEditorPanel({
                 )}
                 {parsed.reminderAt && startDate && (
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500 w-10 flex-shrink-0">提醒</span>
+                    <span className="text-xs text-gray-500 w-10 flex-shrink-0">{t('reminderLabel')}</span>
                     <span className="text-sm text-gray-800">
                       {formatTimeCN(new Date(parsed.reminderAt))}
                       <span className="text-gray-400 text-xs ml-1">
-                        （提前{' '}
+                        {t('minutesBefore')}{' '}
                         {Math.round(
                           (startDate.getTime() - new Date(parsed.reminderAt).getTime()) / 60000,
                         )}{' '}
-                        分钟）
+                        {t('minuteUnit')}
                       </span>
                     </span>
                   </div>
@@ -366,19 +368,19 @@ export function EventEditorPanel({
           <div className="px-5 pt-4 space-y-3">
             {/* Title */}
             <div>
-              <label className="block text-xs text-gray-500 mb-1">标题</label>
+              <label className="block text-xs text-gray-500 mb-1">{t('title')}</label>
               <input
                 autoFocus
                 value={manualTitle}
                 onChange={e => setManualTitle(e.target.value)}
-                placeholder="事件标题"
+                placeholder={t('eventTitlePlaceholder')}
                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
               />
             </div>
 
             {/* Color picker */}
             <div>
-              <label className="block text-xs text-gray-500 mb-1.5">颜色</label>
+              <label className="block text-xs text-gray-500 mb-1.5">{t('color')}</label>
               <div className="flex gap-2">
                 {EVENT_COLOR_OPTIONS.map(opt => (
                   <button
@@ -404,13 +406,13 @@ export function EventEditorPanel({
                 onChange={e => setAllDay(e.target.checked)}
                 className="w-4 h-4 rounded accent-blue-500"
               />
-              <span className="text-sm text-gray-700">全天事件</span>
+              <span className="text-sm text-gray-700">{t('allDay')}</span>
             </label>
 
             {/* Start row */}
             <div className={`flex gap-3 ${allDay ? '' : ''}`}>
               <div className={allDay ? 'flex-1' : 'flex-1'}>
-                <label className="block text-xs text-gray-500 mb-1">开始日期</label>
+                <label className="block text-xs text-gray-500 mb-1">{t('startDate')}</label>
                 <input
                   type="date"
                   value={manualDate}
@@ -420,7 +422,7 @@ export function EventEditorPanel({
               </div>
               {!allDay && (
                 <div className="flex-1">
-                  <label className="block text-xs text-gray-500 mb-1">开始时间</label>
+                  <label className="block text-xs text-gray-500 mb-1">{t('startTime')}</label>
                   <input
                     type="time"
                     value={manualStart}
@@ -434,7 +436,7 @@ export function EventEditorPanel({
             {/* End row */}
             <div className="flex gap-3">
               <div className="flex-1">
-                <label className="block text-xs text-gray-500 mb-1">结束日期</label>
+                <label className="block text-xs text-gray-500 mb-1">{t('endDate')}</label>
                 <input
                   type="date"
                   value={manualEndDate}
@@ -445,7 +447,7 @@ export function EventEditorPanel({
               </div>
               {!allDay && (
                 <div className="flex-1">
-                  <label className="block text-xs text-gray-500 mb-1">结束时间（可选）</label>
+                  <label className="block text-xs text-gray-500 mb-1">{t('endTime')}</label>
                   <input
                     type="time"
                     value={manualEnd}
@@ -459,7 +461,7 @@ export function EventEditorPanel({
             {/* Reminder (hidden for all-day) */}
             {!allDay && (
               <div>
-                <label className="block text-xs text-gray-500 mb-1">提醒</label>
+                <label className="block text-xs text-gray-500 mb-1">{t('reminder')}</label>
                 <select
                   value={reminderOffset}
                   onChange={e => setReminderOffset(e.target.value)}
@@ -476,15 +478,15 @@ export function EventEditorPanel({
 
             {/* Recurrence */}
             <div>
-              <label className="block text-xs text-gray-500 mb-1">重复</label>
+              <label className="block text-xs text-gray-500 mb-1">{t('repeat')}</label>
               <select
                 value={recurrence}
                 onChange={e => setRecurrence(e.target.value as '' | 'daily' | 'weekly')}
                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400 transition bg-white"
               >
-                <option value="">不重复</option>
-                <option value="daily">每日重复</option>
-                <option value="weekly">每周重复</option>
+                <option value="">{t('noRepeat')}</option>
+                <option value="daily">{t('dailyRepeat')}</option>
+                <option value="weekly">{t('weeklyRepeat')}</option>
               </select>
             </div>
           </div>
@@ -500,24 +502,24 @@ export function EventEditorPanel({
                 onClick={() => setConfirmDelete(true)}
                 className="text-sm text-red-500 hover:text-red-700 transition"
               >
-                删除{event?.recurrence ? '（整个系列）' : ''}
+                {t('delete')}{event?.recurrence ? t('deleteSeriesSuffix') : ''}
               </button>
             )}
             {isEdit && confirmDelete && (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500">确认删除？</span>
+                <span className="text-xs text-gray-500">{t('confirmDelete')}</span>
                 <button
                   onClick={handleDelete}
                   disabled={deleting}
                   className="text-sm text-white bg-red-500 hover:bg-red-600 px-3 py-1 rounded-full transition disabled:opacity-50"
                 >
-                  {deleting ? '删除中…' : '确认'}
+                  {deleting ? t('deleting') : t('confirm')}
                 </button>
                 <button
                   onClick={() => setConfirmDelete(false)}
                   className="text-sm text-gray-500 hover:text-gray-700 transition"
                 >
-                  取消
+                  {t('cancel')}
                 </button>
               </div>
             )}
@@ -528,14 +530,14 @@ export function EventEditorPanel({
               onClick={onClose}
               className="px-4 py-1.5 text-sm text-gray-500 hover:bg-gray-100 rounded-full transition"
             >
-              取消
+              {t('cancel')}
             </button>
             <button
               onClick={handleSave}
               disabled={!canSave}
               className="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-full hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed transition"
             >
-              {saving ? '保存中…' : '保存'}
+              {saving ? t('saving') : t('save')}
             </button>
           </div>
         </div>

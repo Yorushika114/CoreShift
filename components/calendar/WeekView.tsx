@@ -6,10 +6,10 @@ import { isToday, toISODateString, formatTimeSlot } from '@/lib/calendar/date-ut
 import { getHoursInTimezone } from '@/lib/calendar/date-utils';
 import { colorFor } from '@/lib/calendar/color-utils';
 import { useSettings } from '@/contexts/SettingsContext';
+import { WEEK_HEADERS_FULL } from '@/lib/i18n';
 import type { CalendarEvent } from '@/types';
 
 const SLOT_HEIGHT = 48;
-const WEEK_DAYS_CN = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
 interface WeekViewProps {
   startDate: Date;
@@ -28,7 +28,8 @@ export function WeekView({
   onSlotClick,
   onEventClick,
 }: WeekViewProps) {
-  const { use24h, timezone } = useSettings();
+  const { use24h, timezone, t, language } = useSettings();
+  const weekDays = WEEK_HEADERS_FULL[language];
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const days = useMemo(
@@ -95,7 +96,7 @@ export function WeekView({
   return (
     <div ref={scrollRef} className="flex-1 overflow-y-auto">
       {/* Sticky header: day names + optional all-day row */}
-      <div className="sticky top-0 z-20 bg-white border-b border-gray-200">
+      <div className="sticky top-0 z-20 bg-white/90 backdrop-blur-sm border-b border-gray-200">
         <div className="flex">
           <div className="w-20 flex-shrink-0" />
           {days.map((day, i) => {
@@ -107,7 +108,7 @@ export function WeekView({
                 onClick={() => onDayClick(day)}
                 className="flex-1 text-center py-2 cursor-pointer hover:bg-gray-50 border-l border-gray-200 transition-colors"
               >
-                <div className="text-xs text-gray-500">{WEEK_DAYS_CN[day.getDay()]}</div>
+                <div className="text-xs text-gray-500">{weekDays[day.getDay()]}</div>
                 <div
                   className={[
                     'text-lg font-medium mx-auto w-8 h-8 flex items-center justify-center rounded-full',
@@ -125,7 +126,7 @@ export function WeekView({
         {hasAllDay && (
           <div className="flex border-t border-gray-100">
             <div className="w-20 flex-shrink-0 text-xs text-gray-400 flex items-center justify-end pr-2 py-1">
-              全天
+              {t('allDay2')}
             </div>
             {days.map((day, i) => {
               const dateKey = toISODateString(day);
@@ -159,7 +160,10 @@ export function WeekView({
               className="absolute w-full flex items-start justify-end pr-2 pt-1"
               style={{ top: `${hour * 2 * SLOT_HEIGHT}px`, height: `${SLOT_HEIGHT}px` }}
             >
-              <span className="text-xs text-gray-400 whitespace-nowrap">
+              <span
+                className="text-xs text-gray-600 whitespace-nowrap"
+                style={{ textShadow: '0 0 4px #fff, 0 0 8px #fff' }}
+              >
                 {formatTimeSlot(hour, 0, use24h)}
               </span>
             </div>

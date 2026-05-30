@@ -72,8 +72,8 @@ function YearPanel({ year, eventDates, isCenter, onMonthClick, onReachBottom, on
                 {MONTHS[monthIndex]}
               </div>
               <div className="grid grid-cols-7 mb-1">
-                {WEEK_DAYS.map(d => (
-                  <div key={d} className="text-center text-xs text-gray-400">{d}</div>
+                {WEEK_DAYS.map((d, i) => (
+                  <div key={i} className="text-center text-xs text-gray-400">{d}</div>
                 ))}
               </div>
               <div className="grid grid-cols-7 gap-y-0.5">

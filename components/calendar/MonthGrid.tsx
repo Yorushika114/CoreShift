@@ -9,9 +9,9 @@ import {
   toISODateString,
 } from '@/lib/calendar/date-utils';
 import { EventCard } from '@/components/events/EventCard';
+import { useSettings } from '@/contexts/SettingsContext';
+import { WEEK_HEADERS_FULL } from '@/lib/i18n';
 import type { CalendarEvent } from '@/types';
-
-const WEEK_HEADERS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
 interface MonthGridProps {
   viewDate: Date;
@@ -20,6 +20,8 @@ interface MonthGridProps {
 }
 
 export function MonthGrid({ viewDate, events, onDateClick }: MonthGridProps) {
+  const { t, language } = useSettings();
+  const weekHeaders = WEEK_HEADERS_FULL[language];
   const days = useMemo(
     () => getCalendarDays(viewDate.getFullYear(), viewDate.getMonth()),
     [viewDate]
@@ -38,16 +40,16 @@ export function MonthGrid({ viewDate, events, onDateClick }: MonthGridProps) {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex items-center px-6 py-3 border-b border-gray-200 flex-shrink-0">
+      <div className="flex items-center px-6 py-3 border-b border-gray-200 flex-shrink-0 bg-white/90 backdrop-blur-sm">
         <h1 className="text-xl font-normal text-gray-600">
           {formatMonthYear(viewDate)}
         </h1>
       </div>
 
-      <div className="grid grid-cols-7 border-b border-gray-200 flex-shrink-0">
-        {WEEK_HEADERS.map(h => (
+      <div className="grid grid-cols-7 border-b border-gray-200 flex-shrink-0 bg-white/90 backdrop-blur-sm">
+        {weekHeaders.map((h, i) => (
           <div
-            key={h}
+            key={i}
             className="py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wide"
           >
             {h}
@@ -72,7 +74,7 @@ export function MonthGrid({ viewDate, events, onDateClick }: MonthGridProps) {
               onClick={() => onDateClick(day)}
               className={[
                 'border-b border-r border-gray-200 p-1 cursor-pointer transition-colors',
-                !inMonth ? 'bg-gray-50 hover:bg-gray-100' : 'bg-white hover:bg-blue-50',
+                !inMonth ? 'bg-gray-50/70 hover:bg-gray-100/80' : 'bg-white/75 hover:bg-blue-50/80',
               ].join(' ')}
             >
               <div
@@ -94,7 +96,7 @@ export function MonthGrid({ viewDate, events, onDateClick }: MonthGridProps) {
                 ))}
                 {dayEvents.length > 3 && (
                   <span className="text-xs text-gray-500 pl-1">
-                    +{dayEvents.length - 3} 更多
+                    +{dayEvents.length - 3} {t('more')}
                   </span>
                 )}
               </div>

@@ -7,6 +7,7 @@ import { parseVoiceCommand } from '@/lib/voice/parseVoiceCommand';
 import { matchEvents } from '@/lib/voice/matchEvents';
 import { applyModify } from '@/lib/voice/applyModify';
 import { formatDateCN, formatTimeCN } from '@/lib/calendar/date-utils';
+import { useSettings } from '@/contexts/SettingsContext';
 import type { CalendarEvent, ParsedCommand } from '@/types';
 
 interface Props {
@@ -21,15 +22,6 @@ interface Props {
   onClose: () => void;
 }
 
-const ERROR_MESSAGES: Record<SpeechErrorKind, string> = {
-  unsupported: '当前浏览器不支持语音识别',
-  'not-allowed': '麦克风权限被拒绝，请改用文字输入',
-  'no-speech': '没听清，请再说一次或改用文字',
-  network: '网络异常，请重试或改用文字',
-  aborted: '识别已取消',
-  'audio-capture': '麦克风被占用或设备异常，请检查音频设备',
-  unknown: '识别出错，请重试或改用文字',
-};
 
 type Result =
   | { kind: 'notfound'; intent: 'delete' | 'modify' }
@@ -62,6 +54,16 @@ async function fetchRange([start, end]: [Date, Date]): Promise<CalendarEvent[]> 
 }
 
 export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, onClose }: Props) {
+  const { t, language } = useSettings();
+  const ERROR_MESSAGES: Record<SpeechErrorKind, string> = {
+    unsupported: language === 'zh' ? '当前浏览器不支持语音识别' : 'Voice recognition not supported in this browser',
+    'not-allowed': language === 'zh' ? '麦克风权限被拒绝，请改用文字输入' : 'Microphone access denied, please use text input',
+    'no-speech': language === 'zh' ? '没听清，请再说一次或改用文字' : 'Nothing detected, please try again or use text',
+    network: language === 'zh' ? '网络异常，请重试或改用文字' : 'Network error, please retry or use text',
+    aborted: language === 'zh' ? '识别已取消' : 'Recognition cancelled',
+    'audio-capture': language === 'zh' ? '麦克风被占用或设备异常，请检查音频设备' : 'Microphone unavailable, please check audio devices',
+    unknown: language === 'zh' ? '识别出错，请重试或改用文字' : 'Recognition error, please retry or use text',
+  };
   const [textMode, setTextMode] = useState(false);
   const [textInput, setTextInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -135,7 +137,7 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
 
       if (results.length === 0) {
         setResult({ kind: 'notfound', intent: parsed.intent });
-        speak('这段时间没有安排');
+        speak(t('noPeriodSchedule'));
         return;
       }
 
@@ -182,11 +184,11 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
     try {
       const res = await fetch(`/api/events/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error();
-      speak('已成功删除');
+      speak(language === 'zh' ? '已成功删除' : 'Successfully deleted');
       onChanged();
       onClose();
     } catch {
-      setActionError('删除失败，请重试');
+      setActionError(language === 'zh' ? '删除失败，请重试' : 'Delete failed, please retry');
       setDeletingId(null);
     }
   }
@@ -210,7 +212,7 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <span className="text-sm font-medium text-gray-700">🎙 语音输入</span>
+          <span className="text-sm font-medium text-gray-700">🎙 {t('voiceInput')}</span>
           <button
             onClick={handleClose}
             className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 text-lg leading-none"
@@ -224,16 +226,16 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
           <div className="px-5 py-5 space-y-3">
             {result.kind === 'notfound' && (
               <p className="text-sm text-gray-600">
-                未找到匹配的事件，换个说法或改用{result.intent === 'delete' ? '手动删除' : '手动编辑'}试试。
+                {result.intent === 'delete' ? t('notFoundDelete') : t('notFoundModify')}
               </p>
             )}
 
             {result.kind === 'delete' && (
               <>
                 {result.approximate && (
-                  <p className="text-xs text-amber-600">没找到精确匹配，以下是相关安排，请确认要删除的：</p>
+                  <p className="text-xs text-amber-600">{t('noExactMatchDelete')}</p>
                 )}
-                <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">确认删除</p>
+                <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">{t('confirmDeleteTitle')}</p>
                 <div className="space-y-2">
                   {result.events.map((e) => (
                     <div key={e.id} className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3 flex items-center gap-3">
@@ -243,7 +245,7 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
                         disabled={deletingId === e.id}
                         className="text-sm text-white bg-red-500 hover:bg-red-600 px-3 py-1 rounded-full transition disabled:opacity-50 flex-shrink-0"
                       >
-                        {deletingId === e.id ? '删除中…' : '删除'}
+                        {deletingId === e.id ? t('deleting') : t('delete')}
                       </button>
                     </div>
                   ))}
@@ -254,9 +256,9 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
             {result.kind === 'modify-pick' && (
               <>
                 {result.approximate && (
-                  <p className="text-xs text-amber-600">没找到精确匹配，以下是相关安排：</p>
+                  <p className="text-xs text-amber-600">{t('noExactMatchModify')}</p>
                 )}
-                <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">选择要修改的事件</p>
+                <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">{t('selectToModify')}</p>
                 <div className="space-y-2">
                   {result.events.map((e) => (
                     <button
@@ -274,10 +276,10 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
             {result.kind === 'query' && (
               <>
                 <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">
-                  {formatDateCN(result.date)} 的安排（{result.events.length}）
+                  {formatDateCN(result.date)} ({result.events.length})
                 </p>
                 {result.events.length === 0 ? (
-                  <p className="text-sm text-gray-500">这天没有安排。</p>
+                  <p className="text-sm text-gray-500">{t('noDaySchedule')}</p>
                 ) : (
                   <div className="space-y-2 max-h-64 overflow-y-auto">
                     {result.events.map((e) => (
@@ -292,17 +294,17 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
 
             {result.kind === 'create-preview' && (
               <>
-                <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">识别结果</p>
+                <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">{t('recognitionResult')}</p>
                 <div className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3 space-y-1.5">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500 w-10 flex-shrink-0">标题</span>
+                    <span className="text-xs text-gray-500 w-10 flex-shrink-0">{t('titleLabel')}</span>
                     <span className="text-sm text-gray-800 font-medium">
                       {result.parsed.title ?? <span className="text-amber-500 italic">（未识别）</span>}
                     </span>
                   </div>
                   {result.parsed.startAt && (
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500 w-10 flex-shrink-0">时间</span>
+                      <span className="text-xs text-gray-500 w-10 flex-shrink-0">{t('timeLabel')}</span>
                       <span className="text-sm text-gray-800">
                         {formatDateCN(new Date(result.parsed.startAt))} {formatTimeCN(new Date(result.parsed.startAt))}
                       </span>
@@ -319,13 +321,13 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
                     onClick={() => setResult(null)}
                     className="px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100 rounded-full transition"
                   >
-                    重新输入
+                    {t('reenter')}
                   </button>
                   <button
                     onClick={() => onCreate(result.original)}
                     className="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-full hover:bg-blue-600 transition"
                   >
-                    填写详情
+                    {t('fillDetails')}
                   </button>
                 </div>
               </>
@@ -339,7 +341,7 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
                   onClick={handleClose}
                   className="px-4 py-1.5 text-sm text-gray-500 hover:bg-gray-100 rounded-full transition"
                 >
-                  关闭
+                  {t('close')}
                 </button>
               </div>
             )}
@@ -347,7 +349,7 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
         ) : busy ? (
           <div className="px-5 py-10 flex flex-col items-center gap-3">
             <span className="text-2xl animate-pulse">⏳</span>
-            <p className="text-sm text-gray-500">处理中…</p>
+            <p className="text-sm text-gray-500">{t('processing')}</p>
           </div>
         ) : !textMode ? (
           <div className="px-5 py-8 flex flex-col items-center gap-5">
@@ -358,13 +360,13 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
                   ? 'bg-blue-500 text-white animate-pulse shadow-lg shadow-blue-200'
                   : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
               }`}
-              aria-label={listening ? '停止' : '开始说话'}
+              aria-label={listening ? t('stop') : t('startSpeaking')}
             >
               🎙
             </button>
 
             <p className="text-sm text-gray-500 min-h-[1.25rem]">
-              {listening ? '正在聆听，说完会自动停止…' : '点击麦克风开始说话'}
+              {listening ? t('listeningActive') : t('listeningIdle')}
             </p>
 
             {interimText && (
@@ -376,14 +378,14 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
             )}
 
             <p className="text-xs text-gray-400 text-center leading-relaxed">
-              试试：明天下午3点开组会 · 删除明天的组会 · 明天有什么安排
+              {t('voiceExamples')}
             </p>
 
             <button
               onClick={() => { stop(); setTextMode(true); }}
               className="text-xs text-blue-500 hover:text-blue-700 transition"
             >
-              改用文字输入
+              {t('switchToText')}
             </button>
           </div>
         ) : (
@@ -396,7 +398,7 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
               onKeyDown={(e) => {
                 if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') submitText();
               }}
-              placeholder={'用自然语言描述\n例：明天下午3点开组会 / 删除明天的组会'}
+              placeholder={t('textInputPlaceholder')}
               rows={3}
               className="w-full resize-none text-sm text-gray-800 placeholder-gray-400 border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
             />
@@ -406,7 +408,7 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
                   onClick={() => { setTextMode(false); start(); }}
                   className="text-xs text-blue-500 hover:text-blue-700 transition"
                 >
-                  ← 改用语音
+                  {t('switchToVoice')}
                 </button>
               ) : <span />}
               <button
@@ -414,7 +416,7 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
                 disabled={!textInput.trim()}
                 className="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-full hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed transition"
               >
-                确定
+                {t('ok')}
               </button>
             </div>
           </div>
