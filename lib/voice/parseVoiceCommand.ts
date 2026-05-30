@@ -75,6 +75,10 @@ function stripTimePhrases(text: string, lang: 'zh-CN' | 'en-US' = 'zh-CN'): stri
 
 function detectIntent(text: string): ParsedCommand['intent'] {
   if (/删除|删掉|删了|取消|移除|去掉|清除|撤销|\bremove\b|\bdelete\b|\bcancel\b/.test(text)) return 'delete';
+  // 时间预算查询：询问某类活动本周花了多久 / 完成进度
+  if (/(了|花了|用了)?多久|(了|花了|用了)?多少(时间|小时|分钟)|时间.{0,8}进度|完成了多少|还差多少|达标|时间够|(how (long|much time|many hours)|time budget|progress)/.test(text)) return 'budget_query';
+  // 时间预算创建：添加/新建 + 目标，或含"每周X小时"的目标语句
+  if (/(添加|新建|创建|设置|增加|加个?|加一个).{0,10}目标|目标.{0,15}(每周|小时|hours?\/?(week|wk))|(add|create|set)\s+\w+\s+(goal|target)/.test(text)) return 'budget_create';
   // 查询：用明确的查询词，不含裸"安排"（"安排"在创建指令里太常见，如"安排明天开会"）
   if (/查看|查询|有什么|有哪些|日程|看看|\bwhat.{0,15}(have|got|scheduled)\b|\bshow\b|\blist\b|\bany events?\b/.test(text)) return 'query';
   // 「提前X分钟/小时提醒」是创建意图（设提醒），不要被下面的"提前"误判为 modify
@@ -255,6 +259,50 @@ export function parseVoiceCommand(
       ? (isEn ? 'What is the title of this event?' : '请问这个事件的标题是什么？')
       : undefined,
   };
+}
+
+const CN_NUM: Record<string, number> = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10, 两: 2 };
+
+function cnToNum(s: string): number {
+  if (/^\d+(\.\d+)?$/.test(s)) return parseFloat(s);
+  let n = 0;
+  for (const c of s) n += CN_NUM[c] ?? 0;
+  return n || 0;
+}
+
+export type ParsedBudgetCreate = {
+  label: string;
+  keywords: string;
+  targetMinutes: number;
+};
+
+export function parseBudgetCreate(text: string): ParsedBudgetCreate {
+  // Label: between action verb and 目标
+  const labelMatch = text.match(/(?:添加|新建|创建|设置|增加|加个?|加一个)\s*([^\s，。,的每周小时目标]{1,10}?)\s*目标/) ??
+                     text.match(/([^\s，。,的每周小时]{1,8}?)\s*目标\s*[，,]?\s*(?:每周|小时)/);
+  const label = labelMatch?.[1]?.trim() ?? '';
+
+  // Target hours: arabic or chinese
+  let targetMinutes = 5 * 60;
+  const arMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:个?小时|h(?:ours?)?)/);
+  if (arMatch) {
+    targetMinutes = Math.round(parseFloat(arMatch[1]) * 60);
+  } else {
+    const cnMatch = text.match(/([一二三四五六七八九十两]+(?:点[五]?)?)\s*(?:个?小时)/);
+    if (cnMatch) {
+      const h = cnToNum(cnMatch[1]);
+      if (h > 0) targetMinutes = h * 60;
+    }
+  }
+
+  // Keywords: after 关键词 / keyword
+  let keywords = '';
+  const kwMatch = text.match(/(?:关键词|keywords?)[是为：: ]*([^，。,.小时目标]{1,30})/i);
+  if (kwMatch) {
+    keywords = kwMatch[1].replace(/[，、\s]+/g, ',').replace(/,+/g, ',').trim();
+  }
+
+  return { label, keywords, targetMinutes };
 }
 
 type LLMParsedCommand = ParsedCommand & {
