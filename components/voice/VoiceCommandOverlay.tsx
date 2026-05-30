@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSpeechRecognition, type SpeechErrorKind } from '@/lib/voice/useSpeechRecognition';
 import { useTTS } from '@/lib/voice/useTTS';
-import { parseVoiceCommand } from '@/lib/voice/parseVoiceCommand';
+import { parseVoiceCommandWithLLM } from '@/lib/voice/parseVoiceCommand';
 import { matchEvents } from '@/lib/voice/matchEvents';
 import { applyModify } from '@/lib/voice/applyModify';
 import { formatDateCN, formatTimeCN } from '@/lib/calendar/date-utils';
@@ -27,7 +27,7 @@ type Result =
   | { kind: 'notfound'; intent: 'delete' | 'modify' }
   | { kind: 'delete'; events: CalendarEvent[]; approximate?: boolean }
   | { kind: 'modify-pick'; events: CalendarEvent[]; pick: (e: CalendarEvent) => void; approximate?: boolean }
-  | { kind: 'query'; date: Date; events: CalendarEvent[] }
+  | { kind: 'query'; date: Date; events: CalendarEvent[]; aiSummary?: string }
   | { kind: 'create-preview'; parsed: ParsedCommand; original: string };
 
 function dayRange(d: Date): [Date, Date] {
@@ -70,8 +70,11 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
   const [result, setResult] = useState<Result | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [lang, setLang] = useState<'zh-CN' | 'en-US'>('zh-CN');
+  const { timezone } = useSettings();
 
   const { supported, listening, interimText, error, start, stop } = useSpeechRecognition({
+    lang,
     onResult: (text) => { if (text) void handleCommand(text); },
   });
   const { speak } = useTTS();
@@ -96,38 +99,68 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
 
   async function handleCommand(text: string) {
     setActionError(null);
-    if (/^退出$|^关闭$|^取消$/.test(text.trim())) { handleClose(); return; }
-    const parsed = parseVoiceCommand(text, new Date());
-
-    // create / unknown：若有歧义先展示预览让用户确认，否则直接打开编辑面板
-    if (parsed.intent === 'create' || parsed.intent === 'unknown') {
-      if (parsed.ambiguities.length > 0) {
-        setResult({ kind: 'create-preview', parsed, original: text });
-      } else {
-        onCreate(text);
-      }
+    setResult(null);
+    if (/^退出$|^关闭$|^取消$|^exit$|^close$|^cancel$/i.test(text.trim())) {
+      handleClose();
       return;
     }
 
     setBusy(true);
     try {
-      const targetDate = parsed.hasDate && parsed.startAt ? new Date(parsed.startAt) : new Date();
+      const parsed = await parseVoiceCommandWithLLM(text, lang, new Date(), timezone);
 
-      if (parsed.intent === 'query') {
-        // 查询是某一天的事：按目标日（无日期则今天）拉当天
-        const events = await fetchRange(dayRange(targetDate));
-        onQuery(targetDate);
-        setResult({ kind: 'query', date: targetDate, events });
-        const msg = events.length === 0
-          ? `${formatDateCN(targetDate)}没有安排`
-          : `${formatDateCN(targetDate)}有${events.length}个安排：${
-              events.map(e => `${e.title}，${formatTimeCN(new Date(e.startAt))}`).join('；')
-            }`;
-        speak(msg);
+      if (parsed.intent === 'create' || parsed.intent === 'unknown') {
+        if (parsed.ambiguities.length > 0) {
+          setResult({ kind: 'create-preview', parsed, original: text });
+        } else {
+          onCreate(text);
+        }
         return;
       }
 
-      // delete / modify：拉宽窗口，交给 matchEvents 分层匹配
+      const targetDate = parsed.hasDate && parsed.startAt ? new Date(parsed.startAt) : new Date();
+
+      if (parsed.intent === 'query') {
+        const fetchStart = parsed.queryRangeStart
+          ? new Date(parsed.queryRangeStart)
+          : dayRange(targetDate)[0];
+        const fetchEnd = parsed.queryRangeEnd
+          ? new Date(parsed.queryRangeEnd)
+          : dayRange(targetDate)[1];
+
+        const events = await fetchRange([fetchStart, fetchEnd]);
+        onQuery(targetDate);
+
+        let aiSummary: string | undefined;
+        try {
+          const summaryRes = await fetch('/api/llm/summarize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              question: text,
+              events,
+              lang,
+              rangeStart: fetchStart.toISOString(),
+              rangeEnd: fetchEnd.toISOString(),
+            }),
+          });
+          if (summaryRes.ok) {
+            const { summary } = await summaryRes.json() as { summary: string };
+            aiSummary = summary;
+          }
+        } catch {}
+
+        setResult({ kind: 'query', date: targetDate, events, aiSummary });
+        speak(aiSummary ?? (
+          events.length === 0
+            ? (lang === 'en-US' ? 'No events found' : `${formatDateCN(targetDate)}没有安排`)
+            : (lang === 'en-US'
+                ? `Found ${events.length} event${events.length > 1 ? 's' : ''}`
+                : `${formatDateCN(targetDate)}有${events.length}个安排`)
+        ));
+        return;
+      }
+
       const events = await fetchRange(wideRange());
       const { results, tier } = matchEvents(events, {
         date: targetDate,
@@ -136,12 +169,11 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
       });
 
       if (results.length === 0) {
-        setResult({ kind: 'notfound', intent: parsed.intent });
+        setResult({ kind: 'notfound', intent: parsed.intent as 'delete' | 'modify' });
         speak(t('noPeriodSchedule'));
         return;
       }
 
-      // 只有"当天精确唯一命中"才直接执行；其余一律列候选让用户选/确认
       const approximate = tier !== 'exact';
 
       if (parsed.intent === 'modify') {
@@ -158,11 +190,10 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
         return;
       }
 
-      // delete
       setResult({ kind: 'delete', events: results, approximate });
     } catch {
-      setActionError('处理失败，请重试');
-      speak('处理失败，请重试');
+      setActionError(lang === 'en-US' ? 'Processing failed, please try again' : '处理失败，请重试');
+      speak(lang === 'en-US' ? 'Processing failed, please try again' : '处理失败，请重试');
     } finally {
       setBusy(false);
     }
@@ -213,12 +244,20 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <span className="text-sm font-medium text-gray-700">🎙 {t('voiceInput')}</span>
-          <button
-            onClick={handleClose}
-            className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 text-lg leading-none"
-          >
-            ×
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setLang(l => l === 'zh-CN' ? 'en-US' : 'zh-CN')}
+              className="text-xs px-2 py-0.5 rounded-full border border-gray-200 text-gray-500 hover:bg-gray-100 transition"
+            >
+              {lang === 'zh-CN' ? '中' : 'EN'}
+            </button>
+            <button
+              onClick={handleClose}
+              className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 text-lg leading-none"
+            >
+              ×
+            </button>
+          </div>
         </div>
 
         {/* 处理结果区 */}
@@ -275,8 +314,16 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
 
             {result.kind === 'query' && (
               <>
+                {result.aiSummary && (
+                  <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3">
+                    <p className="text-xs text-blue-400 font-medium mb-1">AI 摘要</p>
+                    <p className="text-sm text-blue-800 leading-relaxed">{result.aiSummary}</p>
+                  </div>
+                )}
                 <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">
-                  {formatDateCN(result.date)} ({result.events.length})
+                  {lang === 'zh-CN'
+                    ? `${formatDateCN(result.date)} 的安排（${result.events.length}）`
+                    : `Events on ${result.date.toLocaleDateString('en-US')} (${result.events.length})`}
                 </p>
                 {result.events.length === 0 ? (
                   <p className="text-sm text-gray-500">{t('noDaySchedule')}</p>
