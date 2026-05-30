@@ -39,7 +39,10 @@ export function SettingsPanel({ googleConnected, syncing, syncMsg, onSync, onDis
   const [bgUrlInput, setBgUrlInput] = useState(bgType === 'url' ? bgValue : '');
   const [bgError, setBgError] = useState<string | null>(null);
   const [disconnectDialog, setDisconnectDialog] = useState(false);
+  const [icsMsg, setIcsMsg] = useState<string | null>(null);
+  const [icsImporting, setIcsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const icsInputRef = useRef<HTMLInputElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const [panelPos, setPanelPos] = useState<{ bottom: number; left: number; width: number } | null>(null);
 
@@ -261,6 +264,69 @@ export function SettingsPanel({ googleConnected, syncing, syncMsg, onSync, onDis
                 {t('googleConnect')}
               </a>
             )}
+          </div>
+
+          <hr className="border-gray-100" />
+
+          {/* ICS Import / Export */}
+          <div>
+            <p className="text-xs text-gray-500 mb-1.5">
+              {language === 'zh' ? '日历导入 / 导出' : 'Import / Export'}
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => icsInputRef.current?.click()}
+                disabled={icsImporting}
+                className="flex-1 text-xs py-1.5 border border-gray-200 rounded hover:bg-gray-50 transition disabled:opacity-50"
+              >
+                {icsImporting
+                  ? (language === 'zh' ? '导入中…' : 'Importing…')
+                  : (language === 'zh' ? '📥 导入 .ics' : '📥 Import .ics')}
+              </button>
+              <a
+                href="/api/ics/export"
+                download="coreshift-export.ics"
+                className="flex-1 text-xs py-1.5 border border-gray-200 rounded hover:bg-gray-50 transition text-center"
+              >
+                {language === 'zh' ? '📤 导出 .ics' : '📤 Export .ics'}
+              </a>
+            </div>
+            <input
+              ref={icsInputRef}
+              type="file"
+              accept=".ics,text/calendar"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                if (!file) return;
+                setIcsImporting(true);
+                setIcsMsg(null);
+                try {
+                  const text = await file.text();
+                  const res = await fetch('/api/ics/import', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: text,
+                  });
+                  const data = await res.json();
+                  if (res.ok) {
+                    setIcsMsg(
+                      language === 'zh'
+                        ? `已导入 ${data.imported} 个，跳过 ${data.skipped} 个重复`
+                        : `Imported ${data.imported}, skipped ${data.skipped} duplicates`
+                    );
+                  } else {
+                    setIcsMsg(data.error ?? (language === 'zh' ? '导入失败' : 'Import failed'));
+                  }
+                } catch {
+                  setIcsMsg(language === 'zh' ? '导入失败，请重试' : 'Import failed, please retry');
+                } finally {
+                  setIcsImporting(false);
+                }
+              }}
+            />
+            {icsMsg && <p className="text-xs text-gray-500 mt-1">{icsMsg}</p>}
           </div>
 
         </div></div>
