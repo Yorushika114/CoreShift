@@ -1,7 +1,7 @@
 // app/page.tsx
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useTransition } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { MiniCalendar } from '@/components/calendar/MiniCalendar';
 import { MonthGrid } from '@/components/calendar/MonthGrid';
 import { YearGrid } from '@/components/calendar/YearGrid';
@@ -12,6 +12,8 @@ import { WeekView } from '@/components/calendar/WeekView';
 import { DayView } from '@/components/calendar/DayView';
 import { EventEditorPanel } from '@/components/voice/EventEditorPanel';
 import { VoiceCommandOverlay } from '@/components/voice/VoiceCommandOverlay';
+import { SettingsPanel } from '@/components/settings/SettingsPanel';
+import { SettingsProvider, useSettings } from '@/contexts/SettingsContext';
 import { reminderService } from '@/lib/reminder/reminderService';
 import { formatMonthYear, formatDayTitle, getWeekStart } from '@/lib/calendar/date-utils';
 import { expandEvents, realEventId } from '@/lib/calendar/recurrence';
@@ -33,7 +35,8 @@ interface EditorState {
   initialText?: string;
 }
 
-export default function CalendarPage() {
+function CalendarPageInner() {
+  const { bgType, bgValue } = useSettings();
   const [view, setView] = useState<ViewMode>('week');
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [viewDate, setViewDate] = useState(() => new Date());
@@ -42,20 +45,12 @@ export default function CalendarPage() {
   const [showYearPicker, setShowYearPicker] = useState(false);
   const [editor, setEditor] = useState<EditorState>({ open: false });
   const [voiceOpen, setVoiceOpen] = useState(false);
-  const [, startTransition] = useTransition();
   // 保存后滚动到该时刻，保证新建/修改的事件立即可见；导航时清除
   const [focusTime, setFocusTime] = useState<Date | null>(null);
   const [reminderToasts, setReminderToasts] = useState<{ id: string; title: string; timeStr: string }[]>([]);
-  const [use24h, setUse24h] = useState<boolean>(true);
   const [googleConnected, setGoogleConnected] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
-
-  // 服务端与客户端初始值保持一致（true），hydrate 后再从 localStorage 同步
-  useEffect(() => {
-    const saved = localStorage.getItem('use24h');
-    if (saved !== null) setUse24h(saved === 'true');
-  }, []);
 
   useEffect(() => {
     fetch('/api/auth/status').then(r => r.json()).then(d => setGoogleConnected(d.connected));
@@ -159,11 +154,6 @@ export default function CalendarPage() {
     }
     return expandEvents(events, start, end);
   }, [events, view, viewDate]);
-
-  function handleUse24hChange(value: boolean) {
-    localStorage.setItem('use24h', String(value));
-    startTransition(() => setUse24h(value));
-  }
 
   function goToToday() {
     const today = new Date();
@@ -309,28 +299,6 @@ export default function CalendarPage() {
         />
 
         <div className="mt-auto flex flex-col gap-3">
-          <div className="border border-gray-200 rounded-lg p-3">
-            <div className="text-xs text-gray-500 mb-2">🕐 时间格式</div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => handleUse24hChange(false)}
-                className={`flex-1 text-xs py-1 rounded transition-colors ${
-                  !use24h ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                12小时
-              </button>
-              <button
-                onClick={() => handleUse24hChange(true)}
-                className={`flex-1 text-xs py-1 rounded transition-colors ${
-                  use24h ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                24小时
-              </button>
-            </div>
-          </div>
-
           <button
             onClick={() => setVoiceOpen(true)}
             className="flex items-center justify-center gap-2 border border-gray-200 rounded-lg p-3 text-sm text-gray-600 hover:bg-gray-50 hover:border-blue-300 transition"
@@ -339,37 +307,24 @@ export default function CalendarPage() {
             语音输入
           </button>
 
-          {googleConnected ? (
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center gap-1.5 text-xs text-green-600 px-1">
-                <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
-                Google 日历已连接
-              </div>
-              <button
-                onClick={handleSync}
-                disabled={syncing}
-                className="flex items-center justify-center gap-2 border border-gray-200 rounded-lg p-3 text-sm text-gray-600 hover:bg-gray-50 hover:border-blue-300 transition disabled:opacity-50"
-              >
-                <span className="text-base">{syncing ? '⏳' : '🔄'}</span>
-                {syncing ? '同步中…' : '同步 Google 日历'}
-              </button>
-              {syncMsg && <p className="text-xs text-gray-500 px-1">{syncMsg}</p>}
-            </div>
-          ) : (
-            <a
-              href="/api/auth/google"
-              className="flex items-center justify-center gap-2 border border-gray-200 rounded-lg p-3 text-sm text-gray-600 hover:bg-gray-50 hover:border-blue-300 transition"
-            >
-              <span className="text-base">🗓</span>
-              连接 Google 日历
-            </a>
-          )}
-
+          <SettingsPanel
+            googleConnected={googleConnected}
+            syncing={syncing}
+            syncMsg={syncMsg}
+            onSync={handleSync}
+          />
         </div>
       </aside>
 
       {/* Main Area */}
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main
+        className="flex-1 flex flex-col overflow-hidden"
+        style={
+          bgType !== 'none' && bgValue
+            ? { backgroundImage: `url(${bgValue})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+            : undefined
+        }
+      >
         <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-200 flex-shrink-0">
           <button
             onClick={goPrev}
@@ -465,7 +420,6 @@ export default function CalendarPage() {
           <WeekView
             startDate={getWeekStart(viewDate)}
             events={expandedEvents}
-            use24h={use24h}
             focusTime={focusTime}
             onDayClick={handleDayClick}
             onSlotClick={openCreateEditor}
@@ -476,7 +430,6 @@ export default function CalendarPage() {
           <DayView
             date={viewDate}
             events={expandedEvents}
-            use24h={use24h}
             focusTime={focusTime}
             onSlotClick={openCreateEditor}
             onEventClick={openEditEditor}
@@ -525,5 +478,13 @@ export default function CalendarPage() {
         ))}
       </div>
     </div>
+  );
+}
+
+export default function CalendarPage() {
+  return (
+    <SettingsProvider>
+      <CalendarPageInner />
+    </SettingsProvider>
   );
 }

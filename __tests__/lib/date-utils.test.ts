@@ -9,6 +9,8 @@ import {
   formatDayTitle,
   formatTimeSlot,
   getWeekStart,
+  getHoursInTimezone,
+  getDateStringInTimezone,
 } from '@/lib/calendar/date-utils';
 
 describe('getCalendarDays', () => {
@@ -164,5 +166,51 @@ describe('getWeekStart', () => {
     const result = getWeekStart(new Date(2026, 4, 29, 15, 30));
     expect(result.getHours()).toBe(0);
     expect(result.getMinutes()).toBe(0);
+  });
+});
+
+// 2026-05-30T10:00:00Z = Shanghai 18:00 (UTC+8), New York 06:00 (EDT = UTC-4)
+const UTC_10 = new Date('2026-05-30T10:00:00.000Z');
+// 2026-05-30T23:00:00Z = Shanghai 2026-05-31 07:00, New York 2026-05-30 19:00
+const UTC_23 = new Date('2026-05-30T23:00:00.000Z');
+
+describe('getHoursInTimezone', () => {
+  it('returns local hours when no timezone given', () => {
+    const d = new Date(2026, 4, 30, 15, 30); // local 15:30
+    expect(getHoursInTimezone(d)).toEqual({ hours: 15, minutes: 30 });
+  });
+
+  it('converts UTC 10:00 to Shanghai 18:00', () => {
+    expect(getHoursInTimezone(UTC_10, 'Asia/Shanghai')).toEqual({ hours: 18, minutes: 0 });
+  });
+
+  it('converts UTC 10:00 to New York 06:00 (EDT)', () => {
+    expect(getHoursInTimezone(UTC_10, 'America/New_York')).toEqual({ hours: 6, minutes: 0 });
+  });
+
+  it('falls back to local on invalid timezone', () => {
+    const d = new Date(2026, 4, 30, 9, 0);
+    const result = getHoursInTimezone(d, 'Invalid/Zone');
+    expect(result).toEqual({ hours: d.getHours(), minutes: d.getMinutes() });
+  });
+});
+
+describe('getDateStringInTimezone', () => {
+  it('returns local date string when no timezone given', () => {
+    const d = new Date(2026, 4, 30); // local May 30
+    expect(getDateStringInTimezone(d)).toBe('2026-05-30');
+  });
+
+  it('converts UTC 23:00 to Shanghai next day (2026-05-31)', () => {
+    expect(getDateStringInTimezone(UTC_23, 'Asia/Shanghai')).toBe('2026-05-31');
+  });
+
+  it('keeps same day in New York for UTC 23:00 (= 19:00 EDT)', () => {
+    expect(getDateStringInTimezone(UTC_23, 'America/New_York')).toBe('2026-05-30');
+  });
+
+  it('falls back to local on invalid timezone', () => {
+    const d = new Date(2026, 4, 30);
+    expect(getDateStringInTimezone(d, 'Invalid/Zone')).toBe('2026-05-30');
   });
 });

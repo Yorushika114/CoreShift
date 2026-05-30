@@ -3,7 +3,9 @@
 
 import { useRef, useEffect, useMemo } from 'react';
 import { isToday, toISODateString, formatTimeSlot } from '@/lib/calendar/date-utils';
+import { getHoursInTimezone } from '@/lib/calendar/date-utils';
 import { colorFor } from '@/lib/calendar/color-utils';
+import { useSettings } from '@/contexts/SettingsContext';
 import type { CalendarEvent } from '@/types';
 
 const SLOT_HEIGHT = 48;
@@ -12,7 +14,6 @@ const WEEK_DAYS_CN = ['周日', '周一', '周二', '周三', '周四', '周五'
 interface WeekViewProps {
   startDate: Date;
   events: CalendarEvent[];
-  use24h: boolean;
   focusTime?: Date | null;   // 指定滚动到的时刻（如刚保存的事件），优先于"最早事件"
   onDayClick: (date: Date) => void;
   onSlotClick?: (date: Date) => void;
@@ -22,12 +23,12 @@ interface WeekViewProps {
 export function WeekView({
   startDate,
   events,
-  use24h,
   focusTime,
   onDayClick,
   onSlotClick,
   onEventClick,
 }: WeekViewProps) {
+  const { use24h, timezone } = useSettings();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const days = useMemo(
@@ -76,7 +77,8 @@ export function WeekView({
   }, [startDate, focusTime?.getTime()]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const now = new Date();
-  const nowTop = (now.getHours() * 60 + now.getMinutes()) / 30 * SLOT_HEIGHT;
+  const { hours: nowH, minutes: nowM } = getHoursInTimezone(now, timezone);
+  const nowTop = (nowH * 60 + nowM) / 30 * SLOT_HEIGHT;
 
   function handleColumnClick(e: React.MouseEvent<HTMLDivElement>, day: Date) {
     if (!onSlotClick) return;
