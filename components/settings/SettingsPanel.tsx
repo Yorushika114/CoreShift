@@ -213,6 +213,12 @@ export function SettingsPanel({ googleConnected, syncing, syncMsg, onSync, onDis
                   {syncing ? t('syncing') : t('googleSync')}
                 </button>
                 {syncMsg && <p className="text-xs text-gray-500">{syncMsg}</p>}
+                <a
+                  href="/setup/calendars"
+                  className="block text-center text-xs text-blue-500 hover:text-blue-700 transition"
+                >
+                  {language === 'zh' ? '管理同步日历' : 'Manage synced calendars'}
+                </a>
                 {disconnectDialog && (
                   <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
                     <div className="bg-white rounded-xl shadow-xl p-6 w-80 flex flex-col gap-4">

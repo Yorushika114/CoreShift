@@ -14,11 +14,10 @@ export async function PUT(
     const event = await updateEvent(params.id, body);
     eventBus.broadcast('updated');
 
-    // Real-time push to Google Calendar
-    prisma.event.findUnique({ where: { id: params.id }, select: { googleEventId: true } })
+    prisma.event.findUnique({ where: { id: params.id }, select: { googleEventId: true, googleCalendarId: true } })
       .then(async (row) => {
         if (row?.googleEventId) {
-          await updateEventInGoogle(row.googleEventId, event);
+          await updateEventInGoogle(row.googleEventId, event, row.googleCalendarId);
         }
       })
       .catch((e) => console.error('Google update failed:', e));
@@ -34,12 +33,12 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const row = await prisma.event.findUnique({ where: { id: params.id }, select: { googleEventId: true } });
+    const row = await prisma.event.findUnique({ where: { id: params.id }, select: { googleEventId: true, googleCalendarId: true } });
     await deleteEvent(params.id);
     eventBus.broadcast('deleted');
 
     if (row?.googleEventId) {
-      deleteEventFromGoogle(row.googleEventId).catch((e) => console.error('Google delete failed:', e));
+      deleteEventFromGoogle(row.googleEventId, row.googleCalendarId).catch((e) => console.error('Google delete failed:', e));
     }
 
     return new NextResponse(null, { status: 204 });
