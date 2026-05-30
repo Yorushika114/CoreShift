@@ -1,6 +1,7 @@
 // __tests__/components/DayView.test.tsx
 import { render, screen, within } from '@testing-library/react';
 import { DayView } from '@/components/calendar/DayView';
+import { SettingsProvider } from '@/contexts/SettingsContext';
 import type { CalendarEvent } from '@/types';
 
 const MAY_29 = new Date(2026, 4, 29);
@@ -16,25 +17,32 @@ const events: CalendarEvent[] = [
   },
 ];
 
+beforeEach(() => localStorage.clear());
+
+function renderInProvider(ui: React.ReactElement) {
+  return render(<SettingsProvider>{ui}</SettingsProvider>);
+}
+
 describe('DayView', () => {
   it('renders 48 time slots', () => {
-    render(<DayView date={MAY_29} events={[]} use24h={true} />);
+    renderInProvider(<DayView date={MAY_29} events={[]} />);
     expect(screen.getAllByTestId('time-slot').length).toBe(48);
   });
 
   it('shows event title', () => {
-    render(<DayView date={MAY_29} events={events} use24h={true} />);
+    renderInProvider(<DayView date={MAY_29} events={events} />);
     expect(screen.getByText('组会')).toBeInTheDocument();
   });
 
   it('shows event time in 24h format', () => {
-    render(<DayView date={MAY_29} events={events} use24h={true} />);
+    renderInProvider(<DayView date={MAY_29} events={events} />);
     const block = screen.getByTestId('event-block-ev-1');
     expect(within(block).getByText('15:00')).toBeInTheDocument();
   });
 
   it('shows event time in 12h format', () => {
-    render(<DayView date={MAY_29} events={events} use24h={false} />);
+    localStorage.setItem('cs_use24h', 'false');
+    renderInProvider(<DayView date={MAY_29} events={events} />);
     const block = screen.getByTestId('event-block-ev-1');
     expect(within(block).getByText('下午 3:00')).toBeInTheDocument();
   });
@@ -47,7 +55,7 @@ describe('DayView', () => {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    render(<DayView date={MAY_29} events={[otherDayEvent]} use24h={true} />);
+    renderInProvider(<DayView date={MAY_29} events={[otherDayEvent]} />);
     expect(screen.queryByText('其他天的事件')).not.toBeInTheDocument();
   });
 });

@@ -3,7 +3,9 @@
 
 import { useRef, useEffect } from 'react';
 import { isToday, toISODateString, formatTimeSlot } from '@/lib/calendar/date-utils';
+import { getHoursInTimezone } from '@/lib/calendar/date-utils';
 import { colorFor } from '@/lib/calendar/color-utils';
+import { useSettings } from '@/contexts/SettingsContext';
 import type { CalendarEvent } from '@/types';
 
 const SLOT_HEIGHT = 48; // px per 30-min slot
@@ -11,13 +13,13 @@ const SLOT_HEIGHT = 48; // px per 30-min slot
 interface DayViewProps {
   date: Date;
   events: CalendarEvent[];
-  use24h: boolean;
   focusTime?: Date | null;   // 指定滚动到的时刻（如刚保存的事件），优先于"最早事件"
   onSlotClick?: (date: Date) => void;
   onEventClick?: (event: CalendarEvent) => void;
 }
 
-export function DayView({ date, events, use24h, focusTime, onSlotClick, onEventClick }: DayViewProps) {
+export function DayView({ date, events, focusTime, onSlotClick, onEventClick }: DayViewProps) {
+  const { use24h, timezone } = useSettings();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   function handleGridClick(e: React.MouseEvent<HTMLDivElement>) {
@@ -42,7 +44,8 @@ export function DayView({ date, events, use24h, focusTime, onSlotClick, onEventC
 
   const now = new Date();
   const showNowLine = isToday(date);
-  const nowTop = (now.getHours() * 60 + now.getMinutes()) / 30 * SLOT_HEIGHT;
+  const { hours: nowH, minutes: nowM } = getHoursInTimezone(now, timezone);
+  const nowTop = (nowH * 60 + nowM) / 30 * SLOT_HEIGHT;
 
   useEffect(() => {
     if (!scrollRef.current) return;
