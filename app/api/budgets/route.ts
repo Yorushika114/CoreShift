@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+export const dynamic = 'force-dynamic';
+
 function toBudget(b: { id: string; label: string; keywords: string; targetMinutes: number; color: string; createdAt: Date; updatedAt: Date }) {
   return { ...b, createdAt: b.createdAt.toISOString(), updatedAt: b.updatedAt.toISOString() };
 }
