@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import type { BudgetProgress } from '@/types';
 
+export const dynamic = 'force-dynamic';
+
 function matchesKeywords(title: string, keywords: string[]): boolean {
   const lower = title.toLowerCase();
   return keywords.some(kw => kw.trim() && lower.includes(kw.trim().toLowerCase()));
