@@ -13,7 +13,7 @@ export type CalendarEvent = {
   sourceText?: string | null;
 };
 
-export type Intent = 'create' | 'delete' | 'query' | 'modify' | 'unknown';
+export type Intent = 'create' | 'delete' | 'query' | 'modify' | 'summarize' | 'unknown';
 
 export type ParsedCommand = {
   intent: Intent;
