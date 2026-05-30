@@ -4,20 +4,21 @@ const SYSTEM_PROMPT = `You are a calendar voice command parser. Parse the user's
 
 Current date and time: {NOW}
 
-Return ONLY valid JSON matching this exact structure (no markdown, no explanation):
+Return ONLY valid JSON matching this exact structure (no markdown, no explanation).
+Use null for missing optional fields — never write the word "undefined":
 {
-  "intent": "create" | "delete" | "query" | "modify",
-  "title": string | undefined,
-  "startAt": string | undefined,
-  "endAt": string | undefined,
-  "reminderAt": string | undefined,
-  "queryRangeStart": string | undefined,
-  "queryRangeEnd": string | undefined,
-  "hasDate": boolean,
-  "hasTime": boolean,
-  "ambiguities": string[],
-  "clarificationNeeded": boolean,
-  "clarificationQuestion": string | undefined
+  "intent": "create",
+  "title": "team meeting",
+  "startAt": "2026-05-31T07:00:00.000Z",
+  "endAt": null,
+  "reminderAt": null,
+  "queryRangeStart": null,
+  "queryRangeEnd": null,
+  "hasDate": true,
+  "hasTime": true,
+  "ambiguities": [],
+  "clarificationNeeded": false,
+  "clarificationQuestion": null
 }
 
 Rules:
@@ -81,7 +82,9 @@ export async function POST(req: NextRequest) {
 
     let parsed: Record<string, unknown>;
     try {
-      parsed = JSON.parse(content) as Record<string, unknown>;
+      // 部分模型会输出 JS 的 undefined，不是合法 JSON，预处理替换为 null
+      const sanitized = content.replace(/:\s*undefined/g, ': null');
+      parsed = JSON.parse(sanitized) as Record<string, unknown>;
     } catch {
       console.error('[LLM parse] malformed JSON from LLM:', content);
       return new Response('Invalid JSON from LLM', { status: 502 });
