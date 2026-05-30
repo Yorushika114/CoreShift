@@ -25,9 +25,9 @@ export type ParsedCommand = {
   // 避免"改时间"把原事件日期一并改掉。create 路径不依赖这两个字段。
   hasDate?: boolean;
   hasTime?: boolean;
-  /** query intent 时 LLM 解析出的查询时间范围起点（ISO 8601） */
+  /** query / summarize intent 时 LLM 解析出的查询时间范围起点（ISO 8601） */
   queryRangeStart?: string;
-  /** query intent 时 LLM 解析出的查询时间范围终点（ISO 8601） */
+  /** query / summarize intent 时 LLM 解析出的查询时间范围终点（ISO 8601） */
   queryRangeEnd?: string;
   ambiguities: string[];
   clarificationNeeded: boolean;
