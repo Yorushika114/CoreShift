@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useSettings } from '@/contexts/SettingsContext';
 import type { BudgetProgress } from '@/types';
-import { BudgetEditModal } from './BudgetEditModal';
 
 export function getWeekRange(): { start: string; end: string } {
   const now = new Date();
@@ -34,10 +33,9 @@ const DOT_COLORS: Record<string, string> = {
   indigo: 'bg-indigo-500', yellow: 'bg-yellow-400',
 };
 
-export function BudgetPanel() {
+export function BudgetPanel({ onEdit }: { onEdit: () => void }) {
   const { t, language } = useSettings();
   const [progresses, setProgresses] = useState<BudgetProgress[]>([]);
-  const [editOpen, setEditOpen] = useState(false);
 
   const loadProgress = useCallback(async () => {
     const { start, end } = getWeekRange();
@@ -77,7 +75,7 @@ export function BudgetPanel() {
               ↻
             </button>
             <button
-              onClick={() => setEditOpen(true)}
+              onClick={onEdit}
               className="text-gray-400 hover:text-gray-600 transition px-1 text-xs"
               title={language === 'en' ? 'Manage goals' : '管理目标'}
             >
@@ -91,7 +89,7 @@ export function BudgetPanel() {
           <div className="px-3 py-3 text-center">
             <p className="text-xs text-gray-400">{t('budgetEmpty')}</p>
             <button
-              onClick={() => setEditOpen(true)}
+              onClick={onEdit}
               className="mt-1.5 text-xs text-blue-500 hover:text-blue-600 transition"
             >
               + {t('budgetAdd')}
@@ -132,11 +130,6 @@ export function BudgetPanel() {
         )}
       </div>
 
-      {editOpen && (
-        <BudgetEditModal
-          onClose={() => { setEditOpen(false); loadProgress(); }}
-        />
-      )}
     </>
   );
 }

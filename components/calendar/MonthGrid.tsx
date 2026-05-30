@@ -40,27 +40,31 @@ export function MonthGrid({ viewDate, events, onDateClick }: MonthGridProps) {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex items-center px-6 py-3 border-b border-gray-200 flex-shrink-0 bg-white/90 backdrop-blur-sm">
-        <h1 className="text-xl font-normal text-gray-600">
+      <div className="flex items-center px-6 py-3 border-b border-indigo-100/50 flex-shrink-0 bg-white/70 backdrop-blur-sm">
+        <h1 className="text-2xl font-light text-neutral-700 tracking-tight">
           {formatMonthYear(viewDate)}
         </h1>
       </div>
 
-      <div className="grid grid-cols-7 border-b border-gray-200 flex-shrink-0 bg-white/90 backdrop-blur-sm">
-        {weekHeaders.map((h, i) => (
-          <div
-            key={i}
-            className="py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wide"
-          >
-            {h}
-          </div>
-        ))}
+      <div className="grid grid-cols-7 border-b border-indigo-100/50 flex-shrink-0 bg-white/70 backdrop-blur-sm">
+        {weekHeaders.map((h, i) => {
+          const isWeekend = i === 0 || i === 6;
+          return (
+            <div
+              key={i}
+              className={`py-2 text-center text-xs font-medium ${isWeekend ? 'text-indigo-300' : 'text-neutral-400'}`}
+            >
+              {h}
+            </div>
+          );
+        })}
       </div>
 
-      <div className="grid grid-cols-7 flex-1 overflow-auto" style={{ gridAutoRows: 'minmax(80px, 1fr)' }}>
+      <div className="grid grid-cols-7 flex-1 overflow-auto bg-white/70" style={{ gridAutoRows: 'minmax(80px, 1fr)' }}>
         {days.map((day, i) => {
           const inMonth = day.getMonth() === viewDate.getMonth();
           const today = isToday(day);
+          const isWeekend = day.getDay() === 0 || day.getDay() === 6;
           const dateKey = toISODateString(day);
           const dayEvents = (eventsByDate.get(dateKey) ?? []).sort((a, b) => {
             if (a.allDay && !b.allDay) return -1;
@@ -73,18 +77,21 @@ export function MonthGrid({ viewDate, events, onDateClick }: MonthGridProps) {
               key={i}
               onClick={() => onDateClick(day)}
               className={[
-                'border-b border-r border-gray-200 p-1 cursor-pointer transition-colors',
-                !inMonth ? 'bg-gray-50/70 hover:bg-gray-100/80' : 'bg-white/75 hover:bg-blue-50/80',
+                'border-b border-r border-gray-200 p-1.5 cursor-pointer transition-colors',
+                today ? 'bg-indigo-50/70 hover:bg-indigo-50' :
+                !inMonth ? 'bg-white/30 hover:bg-white/50' :
+                isWeekend ? 'bg-violet-50/30 hover:bg-violet-50/60' :
+                'bg-white/60 hover:bg-white/90',
               ].join(' ')}
             >
               <div
                 className={[
-                  'w-7 h-7 flex items-center justify-center text-sm mb-1 rounded-full mx-auto',
+                  'w-7 h-7 flex items-center justify-center text-sm mb-1.5 rounded-full mx-auto transition-colors',
                   today
-                    ? 'bg-blue-600 text-white font-bold'
+                    ? 'bg-indigo-500 text-white font-semibold shadow-sm shadow-indigo-200'
                     : inMonth
-                    ? 'text-gray-900'
-                    : 'text-gray-400',
+                    ? 'text-neutral-700'
+                    : 'text-neutral-300',
                 ].join(' ')}
               >
                 {day.getDate()}
@@ -95,7 +102,7 @@ export function MonthGrid({ viewDate, events, onDateClick }: MonthGridProps) {
                   <EventCard key={event.id} event={event} compact />
                 ))}
                 {dayEvents.length > 3 && (
-                  <span className="text-xs text-gray-500 pl-1">
+                  <span className="text-xs text-neutral-400 pl-1">
                     +{dayEvents.length - 3} {t('more')}
                   </span>
                 )}
