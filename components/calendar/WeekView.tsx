@@ -1,7 +1,7 @@
 // components/calendar/WeekView.tsx
 'use client';
 
-import { useRef, useEffect, useMemo } from 'react';
+import { useRef, useEffect, useMemo, useState } from 'react';
 import { isToday, toISODateString, formatTimeSlot } from '@/lib/calendar/date-utils';
 import { getHoursInTimezone } from '@/lib/calendar/date-utils';
 import { colorFor } from '@/lib/calendar/color-utils';
@@ -97,9 +97,16 @@ export function WeekView({
     scrollRef.current.scrollTop = Math.max(0, scrollTop);
   }, [startDate, focusTime?.getTime()]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const now = new Date();
-  const { hours: nowH, minutes: nowM } = getHoursInTimezone(now, timezone);
-  const nowTop = (nowH * 60 + nowM) / 30 * SLOT_HEIGHT;
+  const [nowTop, setNowTop] = useState<number | null>(null);
+  useEffect(() => {
+    function update() {
+      const { hours: h, minutes: m } = getHoursInTimezone(new Date(), timezone);
+      setNowTop((h * 60 + m) / 30 * SLOT_HEIGHT);
+    }
+    update();
+    const id = setInterval(update, 60_000);
+    return () => clearInterval(id);
+  }, [timezone]);
 
   function handleColumnClick(e: React.MouseEvent<HTMLDivElement>, day: Date) {
     if (!onSlotClick) return;
@@ -212,7 +219,7 @@ export function WeekView({
               ))}
 
               {/* Current time line */}
-              {today && (
+              {today && nowTop !== null && (
                 <div
                   className="absolute left-0 right-0 z-10 pointer-events-none"
                   style={{ top: `${nowTop}px` }}

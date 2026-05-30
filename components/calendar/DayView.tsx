@@ -1,7 +1,7 @@
 // components/calendar/DayView.tsx
 'use client';
 
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { isToday, toISODateString, formatTimeSlot } from '@/lib/calendar/date-utils';
 import { getHoursInTimezone } from '@/lib/calendar/date-utils';
 import { colorFor } from '@/lib/calendar/color-utils';
@@ -62,10 +62,17 @@ export function DayView({ date, events, focusTime, onSlotClick, onEventClick }: 
     e => !e.allDay && toISODateString(new Date(e.startAt)) === dateKey,
   );
 
-  const now = new Date();
   const showNowLine = isToday(date);
-  const { hours: nowH, minutes: nowM } = getHoursInTimezone(now, timezone);
-  const nowTop = (nowH * 60 + nowM) / 30 * SLOT_HEIGHT;
+  const [nowTop, setNowTop] = useState<number | null>(null);
+  useEffect(() => {
+    function update() {
+      const { hours: h, minutes: m } = getHoursInTimezone(new Date(), timezone);
+      setNowTop((h * 60 + m) / 30 * SLOT_HEIGHT);
+    }
+    update();
+    const id = setInterval(update, 60_000);
+    return () => clearInterval(id);
+  }, [timezone]);
 
   useEffect(() => {
     if (!scrollRef.current) return;
@@ -138,7 +145,7 @@ export function DayView({ date, events, focusTime, onSlotClick, onEventClick }: 
           })}
 
           {/* Current time line */}
-          {showNowLine && (
+          {showNowLine && nowTop !== null && (
             <div
               className="absolute left-20 right-0 z-10 pointer-events-none"
               style={{ top: `${nowTop}px` }}
