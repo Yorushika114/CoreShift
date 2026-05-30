@@ -2,7 +2,13 @@ import { NextRequest } from 'next/server';
 
 const SYSTEM_PROMPT = `You are a calendar voice command parser. Parse the user's input into a structured JSON object.
 
-Current date and time: {NOW}
+Current UTC time: {NOW}
+User's local timezone: {TZ}
+User's local date and time: {LOCAL_NOW}
+
+CRITICAL: When the user says a time (e.g. "3 PM", "tomorrow at 7 PM"), they mean LOCAL time in {TZ}.
+You MUST convert local time to UTC when outputting ISO 8601 strings.
+Example: user in Asia/Shanghai (UTC+8) says "tomorrow at 7 PM" → output "2026-05-31T11:00:00.000Z" (19:00 local − 8h = 11:00 UTC).
 
 Return ONLY valid JSON matching this exact structure (no markdown, no explanation).
 Use null for missing optional fields — never write the word "undefined":
@@ -29,8 +35,8 @@ Rules:
 - Output language for all text fields must match the user's input language`;
 
 export async function POST(req: NextRequest) {
-  const body = await req.json() as { text?: unknown; lang?: unknown; now?: unknown };
-  const { text, lang, now } = body;
+  const body = await req.json() as { text?: unknown; lang?: unknown; now?: unknown; tz?: unknown };
+  const { text, lang, now, tz } = body;
 
   if (!text || typeof text !== 'string') {
     return new Response('Missing text', { status: 400 });
@@ -41,10 +47,18 @@ export async function POST(req: NextRequest) {
     return new Response('LLM not configured', { status: 503 });
   }
 
-  const systemPrompt = SYSTEM_PROMPT.replace(
-    '{NOW}',
-    typeof now === 'string' ? now : new Date().toISOString()
-  );
+  const nowStr = typeof now === 'string' ? now : new Date().toISOString();
+  const tzStr = typeof tz === 'string' ? tz : 'Asia/Shanghai';
+  const localNow = new Date(nowStr).toLocaleString('en-US', {
+    timeZone: tzStr,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  });
+
+  const systemPrompt = SYSTEM_PROMPT
+    .replace(/\{NOW\}/g, nowStr)
+    .replace(/\{TZ\}/g, tzStr)
+    .replace('{LOCAL_NOW}', localNow);
 
   const langHint = lang === 'en-US'
     ? '\n\nThe user is speaking English. All text fields in the response must be in English.'

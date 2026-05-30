@@ -136,7 +136,14 @@ export async function parseVoiceCommandWithLLM(
     const res = await fetch('/api/llm/parse', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, lang, now: fallbackDate.toISOString() }),
+      body: JSON.stringify({
+        text,
+        lang,
+        now: fallbackDate.toISOString(),
+        tz: typeof Intl !== 'undefined'
+          ? Intl.DateTimeFormat().resolvedOptions().timeZone
+          : 'Asia/Shanghai',
+      }),
     });
     if (!res.ok) throw new Error(`LLM parse failed: ${res.status}`);
     const parsed = await res.json() as LLMParsedCommand;
