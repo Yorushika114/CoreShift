@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 
@@ -14,6 +14,13 @@ export const metadata: Metadata = {
     title: 'CoreShift',
   },
   formatDetection: { telephone: false },
+  icons: {
+    apple: '/icon-192.png',
+  },
+}
+
+export const viewport: Viewport = {
+  themeColor: '#2563eb',
 }
 
 export default function RootLayout({
@@ -23,10 +30,6 @@ export default function RootLayout({
 }) {
   return (
     <html lang="zh">
-      <head>
-        <meta name="theme-color" content="#2563eb" />
-        <link rel="apple-touch-icon" href="/icon-192.png" />
-      </head>
       <body className={inter.className}>{children}</body>
     </html>
   )
