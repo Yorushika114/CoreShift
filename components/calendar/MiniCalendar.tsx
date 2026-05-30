@@ -83,8 +83,8 @@ export function MiniCalendar({ selectedDate, onDateSelect }: MiniCalendarProps) 
                 'w-7 h-7 mx-auto text-xs rounded-full flex items-center justify-center transition-colors',
                 !inMonth && 'text-gray-300 hover:bg-gray-100',
                 inMonth && !today && !selected && 'text-gray-700 hover:bg-gray-100',
-                today && !selected && 'text-blue-600 font-bold hover:bg-blue-50',
-                selected && 'bg-blue-600 text-white font-bold hover:bg-blue-700',
+                today && !selected && 'text-indigo-500 font-semibold hover:bg-indigo-50',
+                selected && 'bg-indigo-500 text-white font-semibold hover:bg-indigo-600 shadow-sm shadow-indigo-200',
               ]
                 .filter(Boolean)
                 .join(' ')}

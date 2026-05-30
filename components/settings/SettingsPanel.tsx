@@ -38,6 +38,16 @@ export function SettingsPanel({ googleConnected, syncing, syncMsg, onSync }: Set
   const [bgUrlInput, setBgUrlInput] = useState(bgType === 'url' ? bgValue : '');
   const [bgError, setBgError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [panelPos, setPanelPos] = useState<{ bottom: number; left: number; width: number } | null>(null);
+
+  function handleToggle() {
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setPanelPos({ bottom: window.innerHeight - r.top + 4, left: r.left, width: r.width });
+    }
+    setOpen(o => !o);
+  }
 
   function handleBgUrlBlur() {
     const url = bgUrlInput.trim();
@@ -71,20 +81,26 @@ export function SettingsPanel({ googleConnected, syncing, syncMsg, onSync }: Set
   }
 
   return (
-    <div className="border border-gray-200 rounded-lg overflow-hidden">
+    <div className="border border-gray-200 rounded-lg">
       <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-3 py-2 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
+        ref={btnRef}
+        onClick={handleToggle}
+        className="w-full flex items-center justify-between px-3 py-2 text-xs text-gray-600 hover:bg-gray-50 transition-colors rounded-lg"
       >
         <span className="flex items-center gap-1.5">
           <span>⚙</span>
           <span className="font-medium">{t('settings')}</span>
         </span>
-        <span className={`transition-transform duration-200 text-[10px] ${open ? 'rotate-90' : ''}`}>▶</span>
+        <span className={`transition-transform duration-200 text-[10px] ${open ? 'rotate-180' : ''}`}>▼</span>
       </button>
 
-      {open && (
-        <div className="border-t border-gray-100 px-3 pt-3 pb-4 space-y-4">
+      {open && panelPos && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div
+            className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-lg overflow-y-auto"
+            style={{ bottom: panelPos.bottom, left: panelPos.left, width: panelPos.width, maxHeight: 'min(420px, calc(100vh - 120px))' }}
+          ><div className="px-3 pt-3 pb-4 space-y-4">
 
           {/* Time format */}
           <div>
@@ -199,7 +215,8 @@ export function SettingsPanel({ googleConnected, syncing, syncMsg, onSync }: Set
             )}
           </div>
 
-        </div>
+        </div></div>
+        </>
       )}
     </div>
   );

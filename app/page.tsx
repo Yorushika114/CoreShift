@@ -14,6 +14,7 @@ import { EventEditorPanel } from '@/components/voice/EventEditorPanel';
 import { VoiceCommandOverlay } from '@/components/voice/VoiceCommandOverlay';
 import { SettingsPanel } from '@/components/settings/SettingsPanel';
 import { BudgetPanel } from '@/components/budget/BudgetPanel';
+import { BudgetEditModal } from '@/components/budget/BudgetEditModal';
 import { SettingsProvider, useSettings } from '@/contexts/SettingsContext';
 import { WEEK_HEADERS_FULL } from '@/lib/i18n';
 import { reminderService } from '@/lib/reminder/reminderService';
@@ -45,6 +46,7 @@ function CalendarPageInner() {
   // 保存后滚动到该时刻，保证新建/修改的事件立即可见；导航时清除
   const [focusTime, setFocusTime] = useState<Date | null>(null);
   const [reminderToasts, setReminderToasts] = useState<{ id: string; title: string; timeStr: string }[]>([]);
+  const [budgetEditOpen, setBudgetEditOpen] = useState(false);
   const [googleConnected, setGoogleConnected] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
@@ -298,11 +300,10 @@ function CalendarPageInner() {
   const nextLabel = view === 'year' ? t('nextYear') : view === 'month' ? t('nextMonth') : view === 'week' ? t('nextWeek') : t('nextDay');
 
   return (
-    <div className="flex h-screen bg-white font-sans">
+    <div className="flex h-screen font-sans" style={{ background: 'linear-gradient(135deg, #eef2ff 0%, #f5f3ff 40%, #fdf4ff 100%)' }}>
       {/* Left Sidebar */}
-      <aside className="w-64 border-r border-gray-200 flex flex-col flex-shrink-0 overflow-hidden">
-        {/* 固定顶部：不参与滚动 */}
-        <div className="flex flex-col gap-3 p-4 pb-2 flex-shrink-0">
+      <aside className="w-64 border-r border-indigo-100/60 bg-white/80 backdrop-blur-sm flex flex-col flex-shrink-0 overflow-hidden">
+        <div className="flex flex-col gap-3 p-4 pb-2">
           <div className="flex items-center gap-2">
             <span className="text-2xl">🗓</span>
             <span className="text-lg font-medium text-gray-700">CoreShift</span>
@@ -311,13 +312,13 @@ function CalendarPageInner() {
           <div className="flex items-center gap-2">
             <button
               onClick={goToToday}
-              className="text-sm border border-gray-300 rounded-full px-4 py-1.5 hover:bg-gray-50 text-gray-600 transition-colors"
+              className="text-sm border border-neutral-200 rounded-full px-4 py-1.5 hover:bg-neutral-50 text-neutral-600 transition-colors"
             >
               {t('today')}
             </button>
             <button
               onClick={() => openCreateEditor()}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-white bg-blue-500 hover:bg-blue-600 rounded-full transition shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-white bg-indigo-500 hover:bg-indigo-600 rounded-full transition shadow-sm shadow-indigo-200"
             >
               <span className="text-base leading-none">+</span>
               {t('newBtn')}
@@ -333,30 +334,27 @@ function CalendarPageInner() {
             }}
           />
 
-          <BudgetPanel />
+          <BudgetPanel onEdit={() => setBudgetEditOpen(true)} />
         </div>
 
-        {/* 弹性底部：撑满剩余高度，超出时可滚动 */}
-        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 px-4 pb-4">
-          {/* spacer 把内容顶到底部，自身可被压缩到 0 */}
-          <div className="flex-1 min-h-0" />
-          {/* flex-shrink-0 确保这两个元素不被压缩，从而触发容器滚动 */}
+        {/* 弹性空白：把语音+设置推到底部 */}
+        <div className="flex-1" />
+
+        <div className="px-4 pb-4 pt-2 flex flex-col gap-3">
           <button
             onClick={() => setVoiceOpen(true)}
-            className="flex-shrink-0 flex items-center justify-center gap-2 border border-gray-200 rounded-lg p-3 text-sm text-gray-600 hover:bg-gray-50 hover:border-blue-300 transition"
+            className="flex items-center justify-center gap-2 border border-gray-200 rounded-lg p-3 text-sm text-gray-600 hover:bg-gray-50 hover:border-blue-300 transition"
           >
             <span className="text-base">🎙</span>
             {t('voiceInput')}
           </button>
 
-          <div className="flex-shrink-0">
-            <SettingsPanel
-              googleConnected={googleConnected}
-              syncing={syncing}
-              syncMsg={syncMsg}
-              onSync={handleSync}
-            />
-          </div>
+          <SettingsPanel
+            googleConnected={googleConnected}
+            syncing={syncing}
+            syncMsg={syncMsg}
+            onSync={handleSync}
+          />
         </div>
       </aside>
 
@@ -480,6 +478,12 @@ function CalendarPageInner() {
           />
         )}
       </main>
+
+      {budgetEditOpen && (
+        <BudgetEditModal
+          onClose={() => { setBudgetEditOpen(false); }}
+        />
+      )}
 
       {editor.open && (
         <EventEditorPanel
