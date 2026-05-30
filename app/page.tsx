@@ -13,6 +13,7 @@ import { DayView } from '@/components/calendar/DayView';
 import { EventEditorPanel } from '@/components/voice/EventEditorPanel';
 import { VoiceCommandOverlay } from '@/components/voice/VoiceCommandOverlay';
 import { SettingsPanel } from '@/components/settings/SettingsPanel';
+import { BudgetPanel } from '@/components/budget/BudgetPanel';
 import { SettingsProvider, useSettings } from '@/contexts/SettingsContext';
 import { WEEK_HEADERS_FULL } from '@/lib/i18n';
 import { reminderService } from '@/lib/reminder/reminderService';
@@ -331,6 +332,8 @@ function CalendarPageInner() {
               setView('day');
             }}
           />
+
+          <BudgetPanel />
         </div>
 
         {/* 弹性底部：撑满剩余高度，超出时可滚动 */}
