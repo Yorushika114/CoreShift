@@ -86,13 +86,19 @@ function parseDuration(value: string): number {
   return ms;
 }
 
-// Expand RRULE into concrete dates starting from dtstart, up to 1 year from today
+// Expand RRULE into all concrete dates.
+// Finite series (UNTIL/COUNT): expand all instances as defined.
+// Infinite series: expand from dtstart up to 1 year from now.
 function expandRRule(rruleStr: string, dtstart: Date): Date[] {
   try {
     const rule = RRule.fromString(`DTSTART:${dtstart.toISOString().replace(/[-:]/g, '').replace('.000', '')}\nRRULE:${rruleStr}`);
-    const until = new Date();
-    until.setFullYear(until.getFullYear() + 1);
-    const instances = rule.between(new Date(), until, true);
+    const hasUntilOrCount = /UNTIL=|COUNT=/.test(rruleStr);
+    if (hasUntilOrCount) {
+      return rule.all();
+    }
+    const future = new Date();
+    future.setFullYear(future.getFullYear() + 1);
+    const instances = rule.between(dtstart, future, true);
     return instances.length > 0 ? instances : [dtstart];
   } catch {
     return [dtstart];
