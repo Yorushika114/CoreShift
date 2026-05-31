@@ -126,7 +126,7 @@ export function DayView({ date, events, focusTime, onSlotClick, onEventClick }: 
               <div
                 key={i}
                 data-testid="time-slot"
-                className="absolute w-full flex border-b border-gray-100"
+                className={`absolute w-full flex ${minute === 0 ? 'border-b border-gray-200' : 'border-b border-gray-100'}`}
                 style={{ top: `${i * SLOT_HEIGHT}px`, height: `${SLOT_HEIGHT}px` }}
               >
                 <div className="w-20 flex-shrink-0 flex items-start justify-end pr-3 pt-1">
