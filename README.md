@@ -294,5 +294,5 @@ CoreShift/
 
 ## 开发团队
 
-- **KiriTo**：UI / 日历视图 / 事件展示 / PR 审核与 merge 整合
+- **Yorushika114**：UI / 日历视图 / 事件展示 / PR 审核与 merge 整合
 - **Guzi**：语音识别 / 中文 NLP 解析 / 存储 / 查询删除修改逻辑 / 测试
