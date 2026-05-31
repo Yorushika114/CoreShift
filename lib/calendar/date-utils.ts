@@ -136,3 +136,14 @@ export function getDateStringInTimezone(date: Date, timezone?: string): string {
     return toISODateString(date);
   }
 }
+
+// Format time using configured timezone, respecting 24h/language settings.
+export function formatTimeTZ(
+  date: Date,
+  timezone: string | undefined,
+  lang: 'zh' | 'en',
+  use24h: boolean,
+): string {
+  const { hours, minutes } = getHoursInTimezone(date, timezone);
+  return formatTimeSlot(hours, minutes, use24h, lang);
+}
