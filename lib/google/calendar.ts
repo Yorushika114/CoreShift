@@ -17,13 +17,13 @@ function toGoogleEvent(event: Partial<CalendarEvent>) {
   };
 }
 
-async function getDefaultWriteCalendarId(): Promise<string> {
-  const session = await getStoredSession();
+async function getDefaultWriteCalendarId(visitorId?: string): Promise<string> {
+  const session = await getStoredSession(visitorId);
   return session?.defaultWriteCalendarId ?? 'primary';
 }
 
-async function getSelectedCalendarIds(): Promise<string[]> {
-  const session = await getStoredSession();
+async function getSelectedCalendarIds(visitorId?: string): Promise<string[]> {
+  const session = await getStoredSession(visitorId);
   if (!session) return ['primary'];
   try {
     const ids = JSON.parse(session.selectedCalendarIds) as string[];
@@ -33,11 +33,11 @@ async function getSelectedCalendarIds(): Promise<string[]> {
   }
 }
 
-export async function pushEventToGoogle(event: CalendarEvent): Promise<string | null> {
-  const auth = await getAuthenticatedClient();
+export async function pushEventToGoogle(event: CalendarEvent, visitorId?: string): Promise<string | null> {
+  const auth = await getAuthenticatedClient(visitorId);
   if (!auth) return null;
 
-  const calendarId = await getDefaultWriteCalendarId();
+  const calendarId = await getDefaultWriteCalendarId(visitorId);
   const calendar = google.calendar({ version: 'v3', auth });
   const res = await calendar.events.insert({
     calendarId,
@@ -46,11 +46,11 @@ export async function pushEventToGoogle(event: CalendarEvent): Promise<string | 
   return res.data.id ?? null;
 }
 
-export async function updateEventInGoogle(googleEventId: string, event: Partial<CalendarEvent>, googleCalendarId?: string | null): Promise<void> {
-  const auth = await getAuthenticatedClient();
+export async function updateEventInGoogle(googleEventId: string, event: Partial<CalendarEvent>, googleCalendarId?: string | null, visitorId?: string): Promise<void> {
+  const auth = await getAuthenticatedClient(visitorId);
   if (!auth) return;
 
-  const calendarId = googleCalendarId ?? await getDefaultWriteCalendarId();
+  const calendarId = googleCalendarId ?? await getDefaultWriteCalendarId(visitorId);
   const calendar = google.calendar({ version: 'v3', auth });
   await calendar.events.patch({
     calendarId,
@@ -59,20 +59,20 @@ export async function updateEventInGoogle(googleEventId: string, event: Partial<
   });
 }
 
-export async function deleteEventFromGoogle(googleEventId: string, googleCalendarId?: string | null): Promise<void> {
-  const auth = await getAuthenticatedClient();
+export async function deleteEventFromGoogle(googleEventId: string, googleCalendarId?: string | null, visitorId?: string): Promise<void> {
+  const auth = await getAuthenticatedClient(visitorId);
   if (!auth) return;
 
-  const calendarId = googleCalendarId ?? await getDefaultWriteCalendarId();
+  const calendarId = googleCalendarId ?? await getDefaultWriteCalendarId(visitorId);
   const calendar = google.calendar({ version: 'v3', auth });
   await calendar.events.delete({ calendarId, eventId: googleEventId });
 }
 
-export async function syncFromGoogle(): Promise<{ pulled: number; pushed: number }> {
-  const auth = await getAuthenticatedClient();
+export async function syncFromGoogle(visitorId?: string): Promise<{ pulled: number; pushed: number }> {
+  const auth = await getAuthenticatedClient(visitorId);
   if (!auth) return { pulled: 0, pushed: 0 };
 
-  const calendarIds = await getSelectedCalendarIds();
+  const calendarIds = await getSelectedCalendarIds(visitorId);
   const calendar = google.calendar({ version: 'v3', auth });
 
   const now = new Date();
@@ -164,9 +164,9 @@ export async function syncFromGoogle(): Promise<{ pulled: number; pushed: number
         createdAt: event.createdAt.toISOString(),
         updatedAt: event.updatedAt.toISOString(),
       };
-      const googleId = await pushEventToGoogle(calEvent);
+      const googleId = await pushEventToGoogle(calEvent, visitorId);
       if (googleId) {
-        const defaultCalId = await getDefaultWriteCalendarId();
+        const defaultCalId = await getDefaultWriteCalendarId(visitorId);
         await prisma.event.update({
           where: { id: event.id },
           data: {

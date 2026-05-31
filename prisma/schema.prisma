@@ -39,6 +39,7 @@ model TimeBudget {
 
 model Session {
   id                     String   @id @default(cuid())
+  visitorId              String   @default("")
   accessToken            String
   refreshToken           String
   expiresAt              DateTime

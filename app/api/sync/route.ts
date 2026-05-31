@@ -1,10 +1,11 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { syncFromGoogle } from '@/lib/google/calendar';
 import { eventBus } from '@/lib/sse/eventBus';
 
-export async function POST() {
+export async function POST(request: NextRequest) {
+  const visitorId = request.cookies.get('visitor_id')?.value;
   try {
-    const result = await syncFromGoogle();
+    const result = await syncFromGoogle(visitorId);
     if (result.pulled > 0 || result.pushed > 0) {
       eventBus.broadcast('synced');
     }
