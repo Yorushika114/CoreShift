@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { google } from 'googleapis';
 import { createOAuth2Client, saveTokens } from '@/lib/google/auth';
 
 export async function GET(request: NextRequest) {
@@ -17,11 +18,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Missing tokens' }, { status: 400 });
   }
 
+  client.setCredentials(tokens);
+  const oauth2 = google.oauth2({ version: 'v2', auth: client });
+  const { data: userInfo } = await oauth2.userinfo.get();
+  const googleSub = userInfo.id ?? '';
+  const email = userInfo.email ?? '';
+
   await saveTokens(
     tokens.access_token,
     tokens.refresh_token,
     new Date(tokens.expiry_date ?? Date.now() + 3600 * 1000),
     visitorId,
+    googleSub,
+    email,
   );
 
   const redirectUri = process.env.GOOGLE_REDIRECT_URI ?? '';

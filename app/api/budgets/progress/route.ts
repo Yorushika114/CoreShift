@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import type { BudgetProgress } from '@/types';
+import { requireAuth, unauthorized } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,6 +17,9 @@ function eventMinutes(startAt: Date, endAt: Date | null): number {
 }
 
 export async function GET(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (!auth) return unauthorized();
+
   const { searchParams } = new URL(req.url);
   const startParam = searchParams.get('start');
   const endParam = searchParams.get('end');
@@ -28,9 +32,9 @@ export async function GET(req: NextRequest) {
   const rangeEnd = new Date(endParam);
 
   const [budgets, events] = await Promise.all([
-    prisma.timeBudget.findMany({ orderBy: { createdAt: 'asc' } }),
+    prisma.timeBudget.findMany({ where: { userId: auth.userId }, orderBy: { createdAt: 'asc' } }),
     prisma.event.findMany({
-      where: { allDay: false, startAt: { gte: rangeStart, lte: rangeEnd } },
+      where: { userId: auth.userId, allDay: false, startAt: { gte: rangeStart, lte: rangeEnd } },
       select: { title: true, startAt: true, endAt: true },
     }),
   ]);

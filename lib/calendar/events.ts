@@ -30,20 +30,23 @@ function toCalendarEvent(e: {
   };
 }
 
-export async function getEvents(startDate?: Date, endDate?: Date): Promise<CalendarEvent[]> {
+export async function getEvents(userId: string, startDate?: Date, endDate?: Date): Promise<CalendarEvent[]> {
   if (!startDate && !endDate) {
-    const events = await prisma.event.findMany({ orderBy: { startAt: 'asc' } });
+    const events = await prisma.event.findMany({
+      where: { userId },
+      orderBy: { startAt: 'asc' },
+    });
     return events.map(toCalendarEvent);
   }
 
   // Non-recurring events filtered by date range + ALL recurring events (expanded client-side)
   const [rangeEvents, recurringEvents] = await Promise.all([
     prisma.event.findMany({
-      where: { recurrence: null, startAt: { gte: startDate, lte: endDate } },
+      where: { userId, recurrence: null, startAt: { gte: startDate, lte: endDate } },
       orderBy: { startAt: 'asc' },
     }),
     prisma.event.findMany({
-      where: { recurrence: { not: null } },
+      where: { userId, recurrence: { not: null } },
       orderBy: { startAt: 'asc' },
     }),
   ]);
@@ -52,11 +55,13 @@ export async function getEvents(startDate?: Date, endDate?: Date): Promise<Calen
 }
 
 export async function createEvent(
+  userId: string,
   data: Pick<CalendarEvent, 'title' | 'startAt'> &
     Partial<Pick<CalendarEvent, 'endAt' | 'reminderAt' | 'allDay' | 'recurrence' | 'sourceText' | 'color'>>
 ): Promise<CalendarEvent> {
   const event = await prisma.event.create({
     data: {
+      userId,
       title: data.title,
       startAt: new Date(data.startAt),
       endAt: data.endAt ? new Date(data.endAt) : null,
@@ -71,11 +76,12 @@ export async function createEvent(
 }
 
 export async function updateEvent(
+  userId: string,
   id: string,
   data: Partial<Pick<CalendarEvent, 'title' | 'startAt' | 'endAt' | 'reminderAt' | 'allDay' | 'recurrence' | 'sourceText' | 'color'>>
 ): Promise<CalendarEvent> {
   const event = await prisma.event.update({
-    where: { id },
+    where: { id, userId },
     data: {
       ...(data.title !== undefined && { title: data.title }),
       ...(data.startAt !== undefined && { startAt: new Date(data.startAt) }),
@@ -90,6 +96,6 @@ export async function updateEvent(
   return toCalendarEvent(event);
 }
 
-export async function deleteEvent(id: string): Promise<void> {
-  await prisma.event.delete({ where: { id } });
+export async function deleteEvent(userId: string, id: string): Promise<void> {
+  await prisma.event.delete({ where: { id, userId } });
 }
