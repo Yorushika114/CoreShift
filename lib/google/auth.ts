@@ -13,7 +13,12 @@ export function getAuthUrl(visitorId: string) {
   const client = createOAuth2Client();
   return client.generateAuthUrl({
     access_type: 'offline',
-    scope: ['https://www.googleapis.com/auth/calendar'],
+    scope: [
+      'openid',
+      'https://www.googleapis.com/auth/userinfo.email',
+      'https://www.googleapis.com/auth/userinfo.profile',
+      'https://www.googleapis.com/auth/calendar',
+    ],
     prompt: 'consent',
     state: visitorId,
   });
@@ -32,9 +37,13 @@ export async function saveTokens(
   refreshToken: string,
   expiresAt: Date,
   visitorId: string,
+  googleSub: string,
+  email: string,
 ) {
   await prisma.session.deleteMany({ where: { visitorId } });
-  return prisma.session.create({ data: { accessToken, refreshToken, expiresAt, visitorId } });
+  return prisma.session.create({
+    data: { accessToken, refreshToken, expiresAt, visitorId, googleSub, email },
+  });
 }
 
 export async function getAuthenticatedClient(visitorId?: string) {

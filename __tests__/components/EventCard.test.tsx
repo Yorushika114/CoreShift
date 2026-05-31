@@ -30,9 +30,9 @@ describe('EventCard', () => {
     expect(screen.getByText('组会')).toBeInTheDocument();
   });
 
-  it('renders time in Chinese format', () => {
+  it('renders time (default 24h format)', () => {
     renderInProvider(<EventCard event={event} />);
-    expect(screen.getByText('下午3:00')).toBeInTheDocument();
+    expect(screen.getByText('15:00')).toBeInTheDocument();
   });
 
   it('shows reminder indicator when reminderAt is set', () => {

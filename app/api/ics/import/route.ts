@@ -2,10 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { parseIcs } from '@/lib/ics';
 import { prisma } from '@/lib/prisma';
 import { eventBus } from '@/lib/sse/eventBus';
+import { requireAuth, unauthorized } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (!auth) return unauthorized();
+
   const text = await request.text();
   if (!text.includes('BEGIN:VCALENDAR')) {
     return NextResponse.json({ error: '不是有效的 .ics 文件' }, { status: 400 });
@@ -35,6 +39,7 @@ export async function POST(request: NextRequest) {
 
       await prisma.event.create({
         data: {
+          userId: auth.userId,
           title: ev.title,
           startAt: ev.startAt,
           endAt: ev.endAt,

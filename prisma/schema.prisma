@@ -9,6 +9,7 @@ datasource db {
 
 model Event {
   id              String    @id @default(cuid())
+  userId          String    @default("")
   title           String
   startAt         DateTime
   endAt           DateTime?
@@ -29,6 +30,7 @@ model Event {
 
 model TimeBudget {
   id            String   @id @default(cuid())
+  userId        String   @default("")
   label         String
   keywords      String
   targetMinutes Int
@@ -40,6 +42,8 @@ model TimeBudget {
 model Session {
   id                     String   @id @default(cuid())
   visitorId              String   @default("")
+  googleSub              String   @default("")
+  email                  String   @default("")
   accessToken            String
   refreshToken           String
   expiresAt              DateTime

@@ -68,9 +68,9 @@ export async function deleteEventFromGoogle(googleEventId: string, googleCalenda
   await calendar.events.delete({ calendarId, eventId: googleEventId });
 }
 
-export async function syncFromGoogle(visitorId?: string): Promise<{ pulled: number; pushed: number }> {
+export async function syncFromGoogle(visitorId?: string, userId?: string): Promise<{ pulled: number; pushed: number }> {
   const auth = await getAuthenticatedClient(visitorId);
-  if (!auth) return { pulled: 0, pushed: 0 };
+  if (!auth || !userId) return { pulled: 0, pushed: 0 };
 
   const calendarIds = await getSelectedCalendarIds(visitorId);
   const calendar = google.calendar({ version: 'v3', auth });
@@ -111,7 +111,7 @@ export async function syncFromGoogle(visitorId?: string): Promise<{ pulled: numb
       const endAt = gEvent.end?.dateTime ?? gEvent.end?.date;
       if (!startAt) continue;
 
-      const existing = await prisma.event.findFirst({ where: { googleEventId: gEvent.id } });
+      const existing = await prisma.event.findFirst({ where: { googleEventId: gEvent.id, userId } });
 
       if (existing) {
         if (googleUpdatedAt > existing.updatedAt) {
@@ -132,6 +132,7 @@ export async function syncFromGoogle(visitorId?: string): Promise<{ pulled: numb
       } else {
         await prisma.event.create({
           data: {
+            userId,
             title: gEvent.summary,
             startAt: new Date(startAt),
             endAt: endAt ? new Date(endAt) : null,
@@ -149,7 +150,7 @@ export async function syncFromGoogle(visitorId?: string): Promise<{ pulled: numb
   }
 
   // 推送本地没有 googleEventId 的事件
-  const localOnly = await prisma.event.findMany({ where: { googleEventId: null } });
+  const localOnly = await prisma.event.findMany({ where: { userId, googleEventId: null } });
   let pushed = 0;
 
   for (const event of localOnly) {

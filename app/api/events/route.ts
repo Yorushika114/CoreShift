@@ -6,8 +6,12 @@ import { getEvents, createEvent } from '@/lib/calendar/events';
 import { eventBus } from '@/lib/sse/eventBus';
 import { pushEventToGoogle } from '@/lib/google/calendar';
 import { prisma } from '@/lib/prisma';
+import { requireAuth, unauthorized } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (!auth) return unauthorized();
+
   const { searchParams } = new URL(request.url);
   const start = searchParams.get('start');
   const end = searchParams.get('end');
@@ -17,6 +21,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid end date' }, { status: 400 });
   try {
     const events = await getEvents(
+      auth.userId,
       start ? new Date(start) : undefined,
       end ? new Date(end) : undefined
     );
@@ -27,17 +32,18 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (!auth) return unauthorized();
+
   try {
     const body = await request.json();
     if (!body.title || !body.startAt) {
       return NextResponse.json({ error: 'title and startAt are required' }, { status: 400 });
     }
-    const event = await createEvent(body);
+    const event = await createEvent(auth.userId, body);
     eventBus.broadcast('created');
 
-    const visitorId = request.cookies.get('visitor_id')?.value;
-    // Real-time push to Google Calendar (non-blocking on failure)
-    pushEventToGoogle(event, visitorId)
+    pushEventToGoogle(event, auth.visitorId)
       .then(async (googleId) => {
         if (googleId) {
           await prisma.event.update({
