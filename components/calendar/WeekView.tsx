@@ -2,7 +2,7 @@
 'use client';
 
 import { useRef, useEffect, useMemo, useState } from 'react';
-import { isToday, toISODateString, formatTimeSlot } from '@/lib/calendar/date-utils';
+import { isToday, toISODateString, formatTimeSlot, getDateStringInTimezone } from '@/lib/calendar/date-utils';
 import { getHoursInTimezone } from '@/lib/calendar/date-utils';
 import { colorFor } from '@/lib/calendar/color-utils';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -65,13 +65,13 @@ export function WeekView({
   const eventsByDate = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
     for (const e of events) {
-      const key = toISODateString(new Date(e.startAt));
+      const key = getDateStringInTimezone(new Date(e.startAt), timezone);
       const list = map.get(key) ?? [];
       list.push(e);
       map.set(key, list);
     }
     return map;
-  }, [events]);
+  }, [events, timezone]);
 
   const hasAllDay = useMemo(
     () => events.some(e => e.allDay),
@@ -92,10 +92,10 @@ export function WeekView({
       }
     }
     const scrollTop = target
-      ? (target.getHours() * 60 + target.getMinutes()) / 30 * SLOT_HEIGHT - SLOT_HEIGHT * 2
+      ? (() => { const { hours: h, minutes: m } = getHoursInTimezone(target, timezone); return (h * 60 + m) / 30 * SLOT_HEIGHT - SLOT_HEIGHT * 2; })()
       : 8 * 2 * SLOT_HEIGHT;
     scrollRef.current.scrollTop = Math.max(0, scrollTop);
-  }, [startDate, focusTime?.getTime()]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [startDate, focusTime?.getTime(), timezone]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [nowTop, setNowTop] = useState<number | null>(null);
   useEffect(() => {
@@ -157,7 +157,7 @@ export function WeekView({
               {t('allDay2')}
             </div>
             {days.map((day, i) => {
-              const dateKey = toISODateString(day);
+              const dateKey = getDateStringInTimezone(day, timezone);
               const dayAllDay = (eventsByDate.get(dateKey) ?? []).filter(e => e.allDay);
               return (
                 <div key={i} className="flex-1 border-l border-gray-200 p-0.5 min-h-[24px]">
@@ -200,7 +200,7 @@ export function WeekView({
 
         {/* Day columns */}
         {days.map((day, colIndex) => {
-          const dateKey = toISODateString(day);
+          const dateKey = getDateStringInTimezone(day, timezone);
           const timedEvents = (eventsByDate.get(dateKey) ?? []).filter(e => !e.allDay);
           const today = isToday(day);
           const isWeekend = day.getDay() === 0 || day.getDay() === 6;
@@ -236,7 +236,8 @@ export function WeekView({
                 const end = event.endAt
                   ? new Date(event.endAt)
                   : new Date(start.getTime() + 30 * 60_000);
-                const topPx = (start.getHours() * 60 + start.getMinutes()) / 30 * SLOT_HEIGHT;
+                const { hours: startH, minutes: startM } = getHoursInTimezone(start, timezone);
+                const topPx = (startH * 60 + startM) / 30 * SLOT_HEIGHT;
                 const durationMin = (end.getTime() - start.getTime()) / 60000;
                 const heightPx = Math.max(durationMin / 30 * SLOT_HEIGHT - 1, 24);
                 const isShort = heightPx < 40;
@@ -262,7 +263,7 @@ export function WeekView({
                     </div>
                     {!isShort && (
                       <div className="text-xs opacity-80">
-                        {formatTimeSlot(start.getHours(), start.getMinutes(), use24h, language)}
+                        {formatTimeSlot(startH, startM, use24h, language)}
                       </div>
                     )}
                   </div>

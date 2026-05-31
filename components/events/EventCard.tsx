@@ -1,7 +1,7 @@
 // components/events/EventCard.tsx
 'use client';
 
-import { formatTimeCN } from '@/lib/calendar/date-utils';
+import { formatTimeTZ } from '@/lib/calendar/date-utils';
 import { colorFor } from '@/lib/calendar/color-utils';
 import { useSettings } from '@/contexts/SettingsContext';
 import type { CalendarEvent } from '@/types';
@@ -13,9 +13,9 @@ interface EventCardProps {
 }
 
 export function EventCard({ event, compact = false, onClick }: EventCardProps) {
-  const { t } = useSettings();
+  const { t, timezone, language, use24h } = useSettings();
   const color = colorFor(event);
-  const time = formatTimeCN(new Date(event.startAt));
+  const time = formatTimeTZ(new Date(event.startAt), timezone, language, use24h);
   const label = event.allDay
     ? event.title
     : `${time} ${event.title}`;
