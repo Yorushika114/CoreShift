@@ -43,6 +43,7 @@ function CalendarPageInner() {
   const [showYearPicker, setShowYearPicker] = useState(false);
   const [editor, setEditor] = useState<EditorState>({ open: false });
   const [voiceOpen, setVoiceOpen] = useState(false);
+  const [voiceDraft, setVoiceDraft] = useState<string | undefined>();
   // 保存后滚动到该时刻，保证新建/修改的事件立即可见；导航时清除
   const [focusTime, setFocusTime] = useState<Date | null>(null);
   const [reminderToasts, setReminderToasts] = useState<{ id: string; title: string; timeStr: string }[]>([]);
@@ -308,6 +309,14 @@ function CalendarPageInner() {
 
   const prevLabel = view === 'year' ? t('prevYear') : view === 'month' ? t('prevMonth') : view === 'week' ? t('prevWeek') : t('prevDay');
   const nextLabel = view === 'year' ? t('nextYear') : view === 'month' ? t('nextMonth') : view === 'week' ? t('nextWeek') : t('nextDay');
+  const demoCommands = language === 'en'
+    ? ['Meeting tomorrow at 3pm', "What's on tomorrow", 'Move tomorrow meeting to 4pm']
+    : ['明天下午三点提醒我开组会', '明天有什么安排', '把明天下午三点的组会改到四点'];
+
+  function openVoiceWithDraft(command?: string) {
+    setVoiceDraft(command);
+    setVoiceOpen(true);
+  }
 
   return (
     <div className="flex h-screen font-sans" style={{ background: 'linear-gradient(135deg, #eef2ff 0%, #f5f3ff 40%, #fdf4ff 100%)' }}>
@@ -352,12 +361,29 @@ function CalendarPageInner() {
 
         <div className="px-4 pb-4 pt-2 flex flex-col gap-3">
           <button
-            onClick={() => setVoiceOpen(true)}
+            onClick={() => openVoiceWithDraft()}
             className="flex items-center justify-center gap-2 border border-gray-200 rounded-lg p-3 text-sm text-gray-600 hover:bg-gray-50 hover:border-blue-300 transition"
           >
             <span className="text-base">🎙</span>
             {t('voiceInput')}
           </button>
+
+          <div className="rounded-lg border border-indigo-100 bg-indigo-50/70 p-3">
+            <p className="mb-2 text-xs font-medium text-indigo-500">
+              {language === 'en' ? 'Quick demo' : '快速演示'}
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {demoCommands.map(command => (
+                <button
+                  key={command}
+                  onClick={() => openVoiceWithDraft(command)}
+                  className="w-full rounded-md bg-white/80 px-2.5 py-1.5 text-left text-xs leading-relaxed text-gray-600 hover:bg-white hover:text-indigo-600 transition"
+                >
+                  {command}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <SettingsPanel
             googleConnected={googleConnected}
@@ -513,7 +539,11 @@ function CalendarPageInner() {
           onModify={handleVoiceModify}
           onQuery={handleVoiceQuery}
           onChanged={handleVoiceChanged}
-          onClose={() => setVoiceOpen(false)}
+          initialText={voiceDraft}
+          onClose={() => {
+            setVoiceOpen(false);
+            setVoiceDraft(undefined);
+          }}
         />
       )}
 
