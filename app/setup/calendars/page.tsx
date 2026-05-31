@@ -19,6 +19,8 @@ export default function SetupCalendarsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [disconnectDialog, setDisconnectDialog] = useState(false);
 
   useEffect(() => {
     fetch('/api/google/calendars')
@@ -42,6 +44,21 @@ export default function SetupCalendarsPage() {
       else next.add(id);
       return next;
     });
+  }
+
+  async function handleDisconnect(deleteEvents: boolean) {
+    setDisconnecting(true);
+    try {
+      await fetch('/api/auth/google/disconnect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deleteEvents }),
+      });
+      router.push('/');
+    } catch {
+      setError('断开失败，请重试');
+      setDisconnecting(false);
+    }
   }
 
   async function handleConfirm() {
@@ -157,7 +174,44 @@ export default function SetupCalendarsPage() {
         >
           {saving ? '保存中…' : `确认同步 ${selected.size} 个日历`}
         </button>
+
+        <button
+          onClick={() => setDisconnectDialog(true)}
+          disabled={disconnecting}
+          className="w-full py-2 text-xs text-gray-400 hover:text-red-500 transition"
+        >
+          断开 Google 账号
+        </button>
       </div>
+
+      {disconnectDialog && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-80 flex flex-col gap-4">
+            <h3 className="text-base font-medium text-gray-800">断开 Google 日历</h3>
+            <p className="text-sm text-gray-600">是否同时删除从 Google 同步的事件？</p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => { setDisconnectDialog(false); handleDisconnect(false); }}
+                className="w-full py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 transition"
+              >
+                断开，保留事件
+              </button>
+              <button
+                onClick={() => { setDisconnectDialog(false); handleDisconnect(true); }}
+                className="w-full py-2 rounded-lg border border-red-300 text-red-600 text-sm hover:bg-red-50 transition"
+              >
+                断开，同时删除 Google 事件
+              </button>
+              <button
+                onClick={() => setDisconnectDialog(false)}
+                className="w-full py-2 rounded-lg border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
