@@ -13,6 +13,8 @@ import { DayView } from '@/components/calendar/DayView';
 import { EventEditorPanel } from '@/components/voice/EventEditorPanel';
 import { VoiceCommandOverlay } from '@/components/voice/VoiceCommandOverlay';
 import { SettingsPanel } from '@/components/settings/SettingsPanel';
+import { BudgetPanel } from '@/components/budget/BudgetPanel';
+import { BudgetEditModal } from '@/components/budget/BudgetEditModal';
 import { SettingsProvider, useSettings } from '@/contexts/SettingsContext';
 import { WEEK_HEADERS_FULL } from '@/lib/i18n';
 import { reminderService } from '@/lib/reminder/reminderService';
@@ -44,6 +46,7 @@ function CalendarPageInner() {
   // 保存后滚动到该时刻，保证新建/修改的事件立即可见；导航时清除
   const [focusTime, setFocusTime] = useState<Date | null>(null);
   const [reminderToasts, setReminderToasts] = useState<{ id: string; title: string; timeStr: string }[]>([]);
+  const [budgetEditOpen, setBudgetEditOpen] = useState(false);
   const [googleConnected, setGoogleConnected] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
@@ -74,28 +77,53 @@ function CalendarPageInner() {
     }
   }
 
+  async function handleDisconnect(deleteEvents: boolean) {
+    await fetch('/api/auth/google/disconnect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deleteEvents }),
+    });
+    setGoogleConnected(false);
+    fetchEvents(viewDate, view);
+  }
+
   const fetchEvents = useCallback(async (date: Date, currentView: ViewMode) => {
-    setLoading(true);
+    let start: Date, end: Date;
+    if (currentView === 'year') {
+      start = new Date(date.getFullYear(), 0, 1);
+      end = new Date(date.getFullYear(), 11, 31, 23, 59, 59);
+    } else if (currentView === 'month') {
+      start = new Date(date.getFullYear(), date.getMonth(), 1);
+      end = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59);
+    } else if (currentView === 'week') {
+      const ws = getWeekStart(date);
+      start = ws;
+      end = new Date(ws.getTime() + 7 * 24 * 60 * 60 * 1000 - 1);
+    } else {
+      start = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
+      end = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
+    }
+
+    // Stale-while-revalidate：先从 localStorage 渲染缓存，再后台刷新
+    const cacheKey = 'coreshift_events_cache';
     try {
-      let start: Date, end: Date;
-      if (currentView === 'year') {
-        start = new Date(date.getFullYear(), 0, 1);
-        end = new Date(date.getFullYear(), 11, 31, 23, 59, 59);
-      } else if (currentView === 'month') {
-        start = new Date(date.getFullYear(), date.getMonth(), 1);
-        end = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59);
-      } else if (currentView === 'week') {
-        const ws = getWeekStart(date);
-        start = ws;
-        end = new Date(ws.getTime() + 7 * 24 * 60 * 60 * 1000 - 1);
-      } else {
-        start = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
-        end = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        setEvents(JSON.parse(cached));
+        setLoading(false);
       }
+    } catch {}
+
+    try {
+      setLoading(true);
       const res = await fetch(
         `/api/events?start=${start.toISOString()}&end=${end.toISOString()}`
       );
-      if (res.ok) setEvents(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        setEvents(data);
+        try { localStorage.setItem(cacheKey, JSON.stringify(data)); } catch {}
+      }
     } finally {
       setLoading(false);
     }
@@ -104,12 +132,17 @@ function CalendarPageInner() {
   useEffect(() => {
     reminderService.requestPermission();
     return reminderService.onFire((event) => {
-      const timeStr = new Date(event.startAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+      const locale = language === 'en' ? 'en-US' : 'zh-CN';
+      const timeStr = new Date(event.startAt).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
       const toast = { id: event.id + Date.now(), title: event.title, timeStr };
       setReminderToasts(prev => [...prev, toast]);
       setTimeout(() => setReminderToasts(prev => prev.filter(t => t.id !== toast.id)), 8000);
     });
-  }, []);
+  }, [language]);
+
+  useEffect(() => {
+    reminderService.setLang(language);
+  }, [language]);
 
   useEffect(() => {
     fetchEvents(viewDate, view);
@@ -277,40 +310,47 @@ function CalendarPageInner() {
   const nextLabel = view === 'year' ? t('nextYear') : view === 'month' ? t('nextMonth') : view === 'week' ? t('nextWeek') : t('nextDay');
 
   return (
-    <div className="flex h-screen bg-white font-sans">
+    <div className="flex h-screen font-sans" style={{ background: 'linear-gradient(135deg, #eef2ff 0%, #f5f3ff 40%, #fdf4ff 100%)' }}>
       {/* Left Sidebar */}
-      <aside className="w-64 border-r border-gray-200 flex flex-col p-4 gap-3 flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <span className="text-2xl">🗓</span>
-          <span className="text-lg font-medium text-gray-700">CoreShift</span>
+      <aside className="w-64 border-r border-indigo-100/60 bg-white/80 backdrop-blur-sm flex flex-col flex-shrink-0 overflow-hidden">
+        <div className="flex flex-col gap-3 p-4 pb-2">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">🗓</span>
+            <span className="text-lg font-medium text-gray-700">CoreShift</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={goToToday}
+              className="text-sm border border-neutral-200 rounded-full px-4 py-1.5 hover:bg-neutral-50 text-neutral-600 transition-colors"
+            >
+              {t('today')}
+            </button>
+            <button
+              onClick={() => openCreateEditor()}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-white bg-indigo-500 hover:bg-indigo-600 rounded-full transition shadow-sm shadow-indigo-200"
+            >
+              <span className="text-base leading-none">+</span>
+              {t('newBtn')}
+            </button>
+          </div>
+
+          <MiniCalendar
+            selectedDate={selectedDate}
+            onDateSelect={date => {
+              setSelectedDate(date);
+              setViewDate(date);
+              setView('day');
+            }}
+          />
+
+          <BudgetPanel onEdit={() => setBudgetEditOpen(true)} />
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={goToToday}
-            className="text-sm border border-gray-300 rounded-full px-4 py-1.5 hover:bg-gray-50 text-gray-600 transition-colors"
-          >
-            {t('today')}
-          </button>
-          <button
-            onClick={() => openCreateEditor()}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-white bg-blue-500 hover:bg-blue-600 rounded-full transition shadow-sm"
-          >
-            <span className="text-base leading-none">+</span>
-            {t('newBtn')}
-          </button>
-        </div>
+        {/* 弹性空白：把语音+设置推到底部 */}
+        <div className="flex-1" />
 
-        <MiniCalendar
-          selectedDate={selectedDate}
-          onDateSelect={date => {
-            setSelectedDate(date);
-            setViewDate(date);
-            setView('day');
-          }}
-        />
-
-        <div className="mt-auto flex flex-col gap-3">
+        <div className="px-4 pb-4 pt-2 flex flex-col gap-3">
           <button
             onClick={() => setVoiceOpen(true)}
             className="flex items-center justify-center gap-2 border border-gray-200 rounded-lg p-3 text-sm text-gray-600 hover:bg-gray-50 hover:border-blue-300 transition"
@@ -324,6 +364,7 @@ function CalendarPageInner() {
             syncing={syncing}
             syncMsg={syncMsg}
             onSync={handleSync}
+            onDisconnect={handleDisconnect}
           />
         </div>
       </aside>
@@ -448,6 +489,12 @@ function CalendarPageInner() {
           />
         )}
       </main>
+
+      {budgetEditOpen && (
+        <BudgetEditModal
+          onClose={() => { setBudgetEditOpen(false); }}
+        />
+      )}
 
       {editor.open && (
         <EventEditorPanel

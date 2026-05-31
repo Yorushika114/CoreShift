@@ -1,8 +1,8 @@
 // components/calendar/DayView.tsx
 'use client';
 
-import { useRef, useEffect } from 'react';
-import { isToday, toISODateString, formatTimeSlot } from '@/lib/calendar/date-utils';
+import { useRef, useEffect, useState } from 'react';
+import { isToday, toISODateString, formatTimeSlot, getDateStringInTimezone } from '@/lib/calendar/date-utils';
 import { getHoursInTimezone } from '@/lib/calendar/date-utils';
 import { colorFor } from '@/lib/calendar/color-utils';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -39,7 +39,7 @@ interface DayViewProps {
 }
 
 export function DayView({ date, events, focusTime, onSlotClick, onEventClick }: DayViewProps) {
-  const { use24h, timezone, t } = useSettings();
+  const { use24h, timezone, t, language } = useSettings();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   function handleGridClick(e: React.MouseEvent<HTMLDivElement>) {
@@ -54,18 +54,25 @@ export function DayView({ date, events, focusTime, onSlotClick, onEventClick }: 
     onSlotClick(clicked);
   }
 
-  const dateKey = toISODateString(date);
+  const dateKey = getDateStringInTimezone(date, timezone);
   const allDayEvents = events.filter(
-    e => e.allDay && toISODateString(new Date(e.startAt)) === dateKey,
+    e => e.allDay && getDateStringInTimezone(new Date(e.startAt), timezone) === dateKey,
   );
   const timedEvents = events.filter(
-    e => !e.allDay && toISODateString(new Date(e.startAt)) === dateKey,
+    e => !e.allDay && getDateStringInTimezone(new Date(e.startAt), timezone) === dateKey,
   );
 
-  const now = new Date();
   const showNowLine = isToday(date);
-  const { hours: nowH, minutes: nowM } = getHoursInTimezone(now, timezone);
-  const nowTop = (nowH * 60 + nowM) / 30 * SLOT_HEIGHT;
+  const [nowTop, setNowTop] = useState<number | null>(null);
+  useEffect(() => {
+    function update() {
+      const { hours: h, minutes: m } = getHoursInTimezone(new Date(), timezone);
+      setNowTop((h * 60 + m) / 30 * SLOT_HEIGHT);
+    }
+    update();
+    const id = setInterval(update, 60_000);
+    return () => clearInterval(id);
+  }, [timezone]);
 
   useEffect(() => {
     if (!scrollRef.current) return;
@@ -76,10 +83,10 @@ export function DayView({ date, events, focusTime, onSlotClick, onEventClick }: 
       );
     }
     const scrollTop = target
-      ? (target.getHours() * 60 + target.getMinutes()) / 30 * SLOT_HEIGHT - SLOT_HEIGHT * 2
+      ? (() => { const { hours: h, minutes: m } = getHoursInTimezone(target, timezone); return (h * 60 + m) / 30 * SLOT_HEIGHT - SLOT_HEIGHT * 2; })()
       : 8 * 2 * SLOT_HEIGHT; // 无目标时滚到 08:00
     scrollRef.current.scrollTop = Math.max(0, scrollTop);
-  }, [date, focusTime?.getTime()]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [date, focusTime?.getTime(), timezone]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -119,7 +126,7 @@ export function DayView({ date, events, focusTime, onSlotClick, onEventClick }: 
               <div
                 key={i}
                 data-testid="time-slot"
-                className="absolute w-full flex border-b border-gray-100"
+                className={`absolute w-full flex ${minute === 0 ? 'border-b border-gray-200' : 'border-b border-gray-100'}`}
                 style={{ top: `${i * SLOT_HEIGHT}px`, height: `${SLOT_HEIGHT}px` }}
               >
                 <div className="w-20 flex-shrink-0 flex items-start justify-end pr-3 pt-1">
@@ -128,7 +135,7 @@ export function DayView({ date, events, focusTime, onSlotClick, onEventClick }: 
                       className="text-xs text-gray-600 whitespace-nowrap"
                       style={{ textShadow: '0 0 4px #fff, 0 0 8px #fff' }}
                     >
-                      {formatTimeSlot(hour, 0, use24h)}
+                      {formatTimeSlot(hour, 0, use24h, language)}
                     </span>
                   )}
                 </div>
@@ -138,7 +145,7 @@ export function DayView({ date, events, focusTime, onSlotClick, onEventClick }: 
           })}
 
           {/* Current time line */}
-          {showNowLine && (
+          {showNowLine && nowTop !== null && (
             <div
               className="absolute left-20 right-0 z-10 pointer-events-none"
               style={{ top: `${nowTop}px` }}
@@ -157,7 +164,8 @@ export function DayView({ date, events, focusTime, onSlotClick, onEventClick }: 
               const end = event.endAt
                 ? new Date(event.endAt)
                 : new Date(start.getTime() + 30 * 60_000);
-              const topPx = (start.getHours() * 60 + start.getMinutes()) / 30 * SLOT_HEIGHT;
+              const { hours: startH, minutes: startM } = getHoursInTimezone(start, timezone);
+              const topPx = (startH * 60 + startM) / 30 * SLOT_HEIGHT;
               const durationMin = (end.getTime() - start.getTime()) / 60000;
               const heightPx = Math.max(durationMin / 30 * SLOT_HEIGHT - 1, 24);
               const isShort = heightPx < 40;
@@ -183,7 +191,7 @@ export function DayView({ date, events, focusTime, onSlotClick, onEventClick }: 
                   </div>
                   {!isShort && (
                     <div className="text-xs opacity-80">
-                      {formatTimeSlot(start.getHours(), start.getMinutes(), use24h)}
+                      {formatTimeSlot(startH, startM, use24h, language)}
                     </div>
                   )}
                 </div>

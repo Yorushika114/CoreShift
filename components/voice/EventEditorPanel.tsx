@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { parseVoiceCommandWithLLM } from '@/lib/voice/parseVoiceCommand';
 import { useSpeechRecognition } from '@/lib/voice/useSpeechRecognition';
-import { formatDateCN, formatTimeCN } from '@/lib/calendar/date-utils';
+import { formatDate, formatTime, formatTimeCN } from '@/lib/calendar/date-utils';
 import { EVENT_COLOR_OPTIONS } from '@/lib/calendar/color-utils';
 import { useSettings } from '@/contexts/SettingsContext';
 import type { CalendarEvent, ParsedCommand } from '@/types';
@@ -50,7 +50,8 @@ export function EventEditorPanel({
   onSaved,
   onDeleted,
 }: Props) {
-  const { t } = useSettings();
+  const { t, language } = useSettings();
+  const nlpLang: 'zh-CN' | 'en-US' = language === 'en' ? 'en-US' : 'zh-CN';
   const REMINDER_OPTIONS = [
     { label: t('noReminder'), value: '' },
     { label: t('reminder5min'), value: '5' },
@@ -72,6 +73,7 @@ export function EventEditorPanel({
 
   const { supported: micSupported, listening, start: startMic, stop: stopMic } =
     useSpeechRecognition({
+      lang: nlpLang,
       onResult: (text) => {
         if (text) setNlpInput((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text));
       },
@@ -109,6 +111,7 @@ export function EventEditorPanel({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [seriesDeleteMode, setSeriesDeleteMode] = useState<'single' | 'future' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -119,10 +122,10 @@ export function EventEditorPanel({
     const text = nlpInput.trim();
     if (!text) { setParsed(null); return; }
     let cancelled = false;
-    void parseVoiceCommandWithLLM(text, 'zh-CN', defaultStartAt ?? new Date(), timezone)
+    void parseVoiceCommandWithLLM(text, nlpLang, defaultStartAt ?? new Date(), timezone)
       .then(result => { if (!cancelled) setParsed(result); });
     return () => { cancelled = true; };
-  }, [nlpInput]);
+  }, [defaultStartAt, nlpInput, nlpLang, timezone]);
 
   // Keep end date in sync when start date changes (only if they were equal)
   function handleManualDateChange(val: string) {
@@ -222,18 +225,20 @@ export function EventEditorPanel({
     }
   }
 
-  async function handleDelete() {
+  async function handleDelete(mode?: 'future') {
     if (!event) return;
     setDeleting(true);
     setError(null);
     try {
-      const res = await fetch(`/api/events/${event.id}`, { method: 'DELETE' });
+      const url = mode ? `/api/events/${event.id}?mode=future` : `/api/events/${event.id}`;
+      const res = await fetch(url, { method: 'DELETE' });
       if (!res.ok) throw new Error('删除失败');
       onDeleted?.(event.id);
     } catch {
       setError(t('deleteFailed'));
       setDeleting(false);
       setConfirmDelete(false);
+      setSeriesDeleteMode(null);
     }
   }
 
@@ -336,9 +341,9 @@ export function EventEditorPanel({
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-500 w-10 flex-shrink-0">{t('timeLabel')}</span>
                     <span className="text-sm text-gray-800">
-                      {formatDateCN(startDate)} {formatTimeCN(startDate)}
+                      {formatDate(startDate, language)} {formatTime(startDate, language)}
                       {endDate && (
-                        <span className="text-gray-500"> — {formatTimeCN(endDate)}</span>
+                        <span className="text-gray-500"> — {formatTime(endDate, language)}</span>
                       )}
                     </span>
                   </div>
@@ -510,18 +515,45 @@ export function EventEditorPanel({
                 {t('delete')}{event?.recurrence ? t('deleteSeriesSuffix') : ''}
               </button>
             )}
-            {isEdit && confirmDelete && (
+            {isEdit && confirmDelete && !seriesDeleteMode && event?.icsSeriesUid && (
+              <div className="flex flex-col gap-1.5">
+                <span className="text-xs text-gray-500">
+                  {language === 'zh' ? '删除循环事件的范围：' : 'Delete recurring event:'}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setSeriesDeleteMode('single')}
+                    className="text-xs text-white bg-red-500 hover:bg-red-600 px-2.5 py-1 rounded-full transition"
+                  >
+                    {language === 'zh' ? '只删这一条' : 'Only this'}
+                  </button>
+                  <button
+                    onClick={() => setSeriesDeleteMode('future')}
+                    className="text-xs border border-red-400 text-red-500 hover:bg-red-50 px-2.5 py-1 rounded-full transition"
+                  >
+                    {language === 'zh' ? '这条及之后所有' : 'This & future'}
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete(false)}
+                    className="text-xs text-gray-500 hover:text-gray-700 transition"
+                  >
+                    {t('cancel')}
+                  </button>
+                </div>
+              </div>
+            )}
+            {isEdit && confirmDelete && (seriesDeleteMode || !event?.icsSeriesUid) && (
               <div className="flex items-center gap-2">
                 <span className="text-xs text-gray-500">{t('confirmDelete')}</span>
                 <button
-                  onClick={handleDelete}
+                  onClick={() => handleDelete(seriesDeleteMode === 'future' ? 'future' : undefined)}
                   disabled={deleting}
                   className="text-sm text-white bg-red-500 hover:bg-red-600 px-3 py-1 rounded-full transition disabled:opacity-50"
                 >
                   {deleting ? t('deleting') : t('confirm')}
                 </button>
                 <button
-                  onClick={() => setConfirmDelete(false)}
+                  onClick={() => { setConfirmDelete(false); setSeriesDeleteMode(null); }}
                   className="text-sm text-gray-500 hover:text-gray-700 transition"
                 >
                   {t('cancel')}

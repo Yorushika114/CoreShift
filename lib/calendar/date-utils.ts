@@ -52,6 +52,20 @@ export function formatTimeCN(date: Date): string {
   return `${period}${h}:${minutes}`;
 }
 
+export function formatDate(date: Date, lang: 'zh' | 'en'): string {
+  if (lang === 'en') {
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  }
+  return formatDateCN(date);
+}
+
+export function formatTime(date: Date, lang: 'zh' | 'en'): string {
+  if (lang === 'en') {
+    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  }
+  return formatTimeCN(date);
+}
+
 // Uses local time to avoid UTC-offset issues in China (UTC+8)
 export function toISODateString(date: Date): string {
   const y = date.getFullYear();
@@ -66,13 +80,17 @@ export function formatDayTitle(date: Date): string {
   return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${WEEK_DAYS_CN[date.getDay()]}`;
 }
 
-export function formatTimeSlot(hour: number, minute: number, use24h: boolean): string {
+export function formatTimeSlot(hour: number, minute: number, use24h: boolean, lang: 'zh' | 'en' = 'zh'): string {
   const mm = minute.toString().padStart(2, '0');
   if (use24h) {
     return `${hour.toString().padStart(2, '0')}:${mm}`;
   }
-  const period = hour < 12 ? '上午' : '下午';
   const h = hour % 12 || 12;
+  if (lang === 'en') {
+    const period = hour < 12 ? 'AM' : 'PM';
+    return `${h}:${mm} ${period}`;
+  }
+  const period = hour < 12 ? '上午' : '下午';
   return `${period} ${h}:${mm}`;
 }
 
@@ -117,4 +135,15 @@ export function getDateStringInTimezone(date: Date, timezone?: string): string {
   } catch {
     return toISODateString(date);
   }
+}
+
+// Format time using configured timezone, respecting 24h/language settings.
+export function formatTimeTZ(
+  date: Date,
+  timezone: string | undefined,
+  lang: 'zh' | 'en',
+  use24h: boolean,
+): string {
+  const { hours, minutes } = getHoursInTimezone(date, timezone);
+  return formatTimeSlot(hours, minutes, use24h, lang);
 }

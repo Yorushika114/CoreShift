@@ -11,9 +11,26 @@ export type CalendarEvent = {
   createdAt: string;
   updatedAt: string;
   sourceText?: string | null;
+  icsUid?: string | null;
+  icsSeriesUid?: string | null;
 };
 
-export type Intent = 'create' | 'delete' | 'query' | 'modify' | 'summarize' | 'unknown';
+export type Intent = 'create' | 'delete' | 'query' | 'modify' | 'summarize' | 'budget_query' | 'budget_create' | 'unknown';
+
+export type TimeBudget = {
+  id: string;
+  label: string;
+  keywords: string;
+  targetMinutes: number;
+  color: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type BudgetProgress = TimeBudget & {
+  actualMinutes: number;
+  percentage: number;
+};
 
 export type ParsedCommand = {
   intent: Intent;

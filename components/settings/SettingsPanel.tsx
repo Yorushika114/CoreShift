@@ -26,9 +26,10 @@ interface SettingsPanelProps {
   syncing: boolean;
   syncMsg: string | null;
   onSync: () => void;
+  onDisconnect: (deleteEvents: boolean) => void;
 }
 
-export function SettingsPanel({ googleConnected, syncing, syncMsg, onSync }: SettingsPanelProps) {
+export function SettingsPanel({ googleConnected, syncing, syncMsg, onSync, onDisconnect }: SettingsPanelProps) {
   const { use24h, language, timezone, bgType, bgValue, setUse24h, setLanguage, setTimezone, setBg, t } = useSettings();
   const TIMEZONES = Object.entries(TZ_LABELS).map(([value, labels]) => ({
     value,
@@ -37,7 +38,21 @@ export function SettingsPanel({ googleConnected, syncing, syncMsg, onSync }: Set
   const [open, setOpen] = useState(false);
   const [bgUrlInput, setBgUrlInput] = useState(bgType === 'url' ? bgValue : '');
   const [bgError, setBgError] = useState<string | null>(null);
+  const [disconnectDialog, setDisconnectDialog] = useState(false);
+  const [icsMsg, setIcsMsg] = useState<string | null>(null);
+  const [icsImporting, setIcsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const icsInputRef = useRef<HTMLInputElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [panelPos, setPanelPos] = useState<{ bottom: number; left: number; width: number } | null>(null);
+
+  function handleToggle() {
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setPanelPos({ bottom: window.innerHeight - r.top + 4, left: r.left, width: r.width });
+    }
+    setOpen(o => !o);
+  }
 
   function handleBgUrlBlur() {
     const url = bgUrlInput.trim();
@@ -54,7 +69,7 @@ export function SettingsPanel({ googleConnected, syncing, syncMsg, onSync }: Set
 
   function handleFileUpload(file: File) {
     setBgError(null);
-    if (file.size > 2 * 1024 * 1024) {
+    if (file.size > 20 * 1024 * 1024) {
       setBgError(t('bgTooLarge'));
       return;
     }
@@ -71,20 +86,26 @@ export function SettingsPanel({ googleConnected, syncing, syncMsg, onSync }: Set
   }
 
   return (
-    <div className="border border-gray-200 rounded-lg overflow-hidden">
+    <div className="border border-gray-200 rounded-lg">
       <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-3 py-2 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
+        ref={btnRef}
+        onClick={handleToggle}
+        className="w-full flex items-center justify-between px-3 py-2 text-xs text-gray-600 hover:bg-gray-50 transition-colors rounded-lg"
       >
         <span className="flex items-center gap-1.5">
           <span>⚙</span>
           <span className="font-medium">{t('settings')}</span>
         </span>
-        <span className={`transition-transform duration-200 text-[10px] ${open ? 'rotate-90' : ''}`}>▶</span>
+        <span className={`transition-transform duration-200 text-[10px] ${open ? 'rotate-180' : ''}`}>▼</span>
       </button>
 
-      {open && (
-        <div className="border-t border-gray-100 px-3 py-3 space-y-4">
+      {open && panelPos && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div
+            className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-lg overflow-y-auto"
+            style={{ bottom: panelPos.bottom, left: panelPos.left, width: panelPos.width, maxHeight: 'min(420px, calc(100vh - 120px))' }}
+          ><div className="px-3 pt-3 pb-4 space-y-4">
 
           {/* Time format */}
           <div>
@@ -174,9 +195,17 @@ export function SettingsPanel({ googleConnected, syncing, syncMsg, onSync }: Set
             <p className="text-xs text-gray-500 mb-1.5">{t('googleSection')}</p>
             {googleConnected ? (
               <div className="space-y-1.5">
-                <div className="flex items-center gap-1.5 text-xs text-green-600">
-                  <span className="w-2 h-2 rounded-full bg-green-500 inline-block flex-shrink-0" />
-                  {t('googleConnected')}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs text-green-600">
+                    <span className="w-2 h-2 rounded-full bg-green-500 inline-block flex-shrink-0" />
+                    {t('googleConnected')}
+                  </div>
+                  <button
+                    onClick={() => setDisconnectDialog(true)}
+                    className="text-xs text-gray-400 hover:text-red-500 transition"
+                  >
+                    {language === 'zh' ? '断开' : 'Disconnect'}
+                  </button>
                 </div>
                 <button
                   onClick={onSync}
@@ -187,6 +216,44 @@ export function SettingsPanel({ googleConnected, syncing, syncMsg, onSync }: Set
                   {syncing ? t('syncing') : t('googleSync')}
                 </button>
                 {syncMsg && <p className="text-xs text-gray-500">{syncMsg}</p>}
+                <a
+                  href="/setup/calendars"
+                  className="block text-center text-xs text-blue-500 hover:text-blue-700 transition"
+                >
+                  {language === 'zh' ? '管理同步日历' : 'Manage synced calendars'}
+                </a>
+                {disconnectDialog && (
+                  <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-xl shadow-xl p-6 w-80 flex flex-col gap-4">
+                      <h3 className="text-base font-medium text-gray-800">
+                        {language === 'zh' ? '断开 Google 日历' : 'Disconnect Google Calendar'}
+                      </h3>
+                      <p className="text-sm text-gray-600">
+                        {language === 'zh' ? '是否同时删除从 Google 同步的事件？' : 'Also delete events synced from Google?'}
+                      </p>
+                      <div className="flex flex-col gap-2">
+                        <button
+                          onClick={() => { setDisconnectDialog(false); onDisconnect(false); }}
+                          className="w-full py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 transition"
+                        >
+                          {language === 'zh' ? '断开，保留事件' : 'Disconnect, keep events'}
+                        </button>
+                        <button
+                          onClick={() => { setDisconnectDialog(false); onDisconnect(true); }}
+                          className="w-full py-2 rounded-lg border border-red-300 text-red-600 text-sm hover:bg-red-50 transition"
+                        >
+                          {language === 'zh' ? '断开，同时删除 Google 事件' : 'Disconnect and delete Google events'}
+                        </button>
+                        <button
+                          onClick={() => setDisconnectDialog(false)}
+                          className="w-full py-2 rounded-lg border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition"
+                        >
+                          {language === 'zh' ? '取消' : 'Cancel'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <a
@@ -199,7 +266,71 @@ export function SettingsPanel({ googleConnected, syncing, syncMsg, onSync }: Set
             )}
           </div>
 
-        </div>
+          <hr className="border-gray-100" />
+
+          {/* ICS Import / Export */}
+          <div>
+            <p className="text-xs text-gray-500 mb-1.5">
+              {language === 'zh' ? '日历导入 / 导出' : 'Import / Export'}
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => icsInputRef.current?.click()}
+                disabled={icsImporting}
+                className="flex-1 text-xs py-1.5 border border-gray-200 rounded hover:bg-gray-50 transition disabled:opacity-50"
+              >
+                {icsImporting
+                  ? (language === 'zh' ? '导入中…' : 'Importing…')
+                  : (language === 'zh' ? '📥 导入 .ics' : '📥 Import .ics')}
+              </button>
+              <a
+                href="/api/ics/export"
+                download="coreshift-export.ics"
+                className="flex-1 text-xs py-1.5 border border-gray-200 rounded hover:bg-gray-50 transition text-center"
+              >
+                {language === 'zh' ? '📤 导出 .ics' : '📤 Export .ics'}
+              </a>
+            </div>
+            <input
+              ref={icsInputRef}
+              type="file"
+              accept=".ics,text/calendar"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                if (!file) return;
+                setIcsImporting(true);
+                setIcsMsg(null);
+                try {
+                  const text = await file.text();
+                  const res = await fetch('/api/ics/import', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: text,
+                  });
+                  const data = await res.json();
+                  if (res.ok) {
+                    setIcsMsg(
+                      language === 'zh'
+                        ? `已导入 ${data.imported} 个，跳过 ${data.skipped} 个重复`
+                        : `Imported ${data.imported}, skipped ${data.skipped} duplicates`
+                    );
+                  } else {
+                    setIcsMsg(data.error ?? (language === 'zh' ? '导入失败' : 'Import failed'));
+                  }
+                } catch {
+                  setIcsMsg(language === 'zh' ? '导入失败，请重试' : 'Import failed, please retry');
+                } finally {
+                  setIcsImporting(false);
+                }
+              }}
+            />
+            {icsMsg && <p className="text-xs text-gray-500 mt-1">{icsMsg}</p>}
+          </div>
+
+        </div></div>
+        </>
       )}
     </div>
   );

@@ -2,9 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createOAuth2Client, saveTokens } from '@/lib/google/auth';
 
 export async function GET(request: NextRequest) {
-  const code = new URL(request.url).searchParams.get('code');
-  if (!code) {
-    return NextResponse.json({ error: 'Missing code' }, { status: 400 });
+  const params = new URL(request.url).searchParams;
+  const code = params.get('code');
+  const visitorId = params.get('state');
+
+  if (!code || !visitorId) {
+    return NextResponse.json({ error: 'Missing code or state' }, { status: 400 });
   }
 
   const client = createOAuth2Client();
@@ -17,8 +20,25 @@ export async function GET(request: NextRequest) {
   await saveTokens(
     tokens.access_token,
     tokens.refresh_token,
-    new Date(tokens.expiry_date ?? Date.now() + 3600 * 1000)
+    new Date(tokens.expiry_date ?? Date.now() + 3600 * 1000),
+    visitorId,
   );
 
-  return NextResponse.redirect(new URL('/', request.url));
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI ?? '';
+  const baseUrl = redirectUri
+    ? redirectUri.replace('/api/auth/google/callback', '')
+    : (() => {
+        const proto = request.headers.get('x-forwarded-proto') ?? 'https';
+        const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host') ?? '';
+        return `${proto}://${host}`;
+      })();
+
+  const response = NextResponse.redirect(`${baseUrl}/setup/calendars`);
+  response.cookies.set('visitor_id', visitorId, {
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge: 60 * 60 * 24 * 365 * 10,
+    path: '/',
+  });
+  return response;
 }

@@ -14,11 +14,11 @@ export async function PUT(
     const event = await updateEvent(params.id, body);
     eventBus.broadcast('updated');
 
-    // Real-time push to Google Calendar
-    prisma.event.findUnique({ where: { id: params.id }, select: { googleEventId: true } })
+    const visitorId = request.cookies.get('visitor_id')?.value;
+    prisma.event.findUnique({ where: { id: params.id }, select: { googleEventId: true, googleCalendarId: true } })
       .then(async (row) => {
         if (row?.googleEventId) {
-          await updateEventInGoogle(row.googleEventId, event);
+          await updateEventInGoogle(row.googleEventId, event, row.googleCalendarId, visitorId);
         }
       })
       .catch((e) => console.error('Google update failed:', e));
@@ -30,16 +30,39 @@ export async function PUT(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const row = await prisma.event.findUnique({ where: { id: params.id }, select: { googleEventId: true } });
-    await deleteEvent(params.id);
-    eventBus.broadcast('deleted');
+    const mode = request.nextUrl.searchParams.get('mode');
+    const row = await prisma.event.findUnique({
+      where: { id: params.id },
+      select: { googleEventId: true, googleCalendarId: true, icsSeriesUid: true, startAt: true },
+    });
 
-    if (row?.googleEventId) {
-      deleteEventFromGoogle(row.googleEventId).catch((e) => console.error('Google delete failed:', e));
+    const visitorId = request.cookies.get('visitor_id')?.value;
+
+    if (mode === 'future' && row?.icsSeriesUid) {
+      // Delete this instance + all future instances of the same ICS series
+      const futureRows = await prisma.event.findMany({
+        where: { icsSeriesUid: row.icsSeriesUid, startAt: { gte: row.startAt } },
+        select: { id: true, googleEventId: true, googleCalendarId: true },
+      });
+      await prisma.event.deleteMany({
+        where: { icsSeriesUid: row.icsSeriesUid, startAt: { gte: row.startAt } },
+      });
+      eventBus.broadcast('deleted');
+      for (const r of futureRows) {
+        if (r.googleEventId) {
+          deleteEventFromGoogle(r.googleEventId, r.googleCalendarId, visitorId).catch((e) => console.error('Google delete failed:', e));
+        }
+      }
+    } else {
+      await deleteEvent(params.id);
+      eventBus.broadcast('deleted');
+      if (row?.googleEventId) {
+        deleteEventFromGoogle(row.googleEventId, row.googleCalendarId, visitorId).catch((e) => console.error('Google delete failed:', e));
+      }
     }
 
     return new NextResponse(null, { status: 204 });

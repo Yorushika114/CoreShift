@@ -9,26 +9,36 @@ export function createOAuth2Client() {
   );
 }
 
-export function getAuthUrl() {
+export function getAuthUrl(visitorId: string) {
   const client = createOAuth2Client();
   return client.generateAuthUrl({
     access_type: 'offline',
     scope: ['https://www.googleapis.com/auth/calendar'],
     prompt: 'consent',
+    state: visitorId,
   });
 }
 
-export async function getStoredSession() {
-  return prisma.session.findFirst({ orderBy: { createdAt: 'desc' } });
+export async function getStoredSession(visitorId?: string) {
+  if (!visitorId) return null;
+  return prisma.session.findFirst({
+    where: { visitorId },
+    orderBy: { createdAt: 'desc' },
+  });
 }
 
-export async function saveTokens(accessToken: string, refreshToken: string, expiresAt: Date) {
-  await prisma.session.deleteMany();
-  return prisma.session.create({ data: { accessToken, refreshToken, expiresAt } });
+export async function saveTokens(
+  accessToken: string,
+  refreshToken: string,
+  expiresAt: Date,
+  visitorId: string,
+) {
+  await prisma.session.deleteMany({ where: { visitorId } });
+  return prisma.session.create({ data: { accessToken, refreshToken, expiresAt, visitorId } });
 }
 
-export async function getAuthenticatedClient() {
-  const session = await getStoredSession();
+export async function getAuthenticatedClient(visitorId?: string) {
+  const session = await getStoredSession(visitorId);
   if (!session) return null;
 
   const client = createOAuth2Client();
@@ -40,6 +50,7 @@ export async function getAuthenticatedClient() {
 
   client.on('tokens', async (tokens) => {
     await prisma.session.updateMany({
+      where: { visitorId: session.visitorId },
       data: {
         accessToken: tokens.access_token ?? session.accessToken,
         ...(tokens.refresh_token && { refreshToken: tokens.refresh_token }),

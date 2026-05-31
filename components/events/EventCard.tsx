@@ -1,7 +1,7 @@
 // components/events/EventCard.tsx
 'use client';
 
-import { formatTimeCN } from '@/lib/calendar/date-utils';
+import { formatTimeTZ } from '@/lib/calendar/date-utils';
 import { colorFor } from '@/lib/calendar/color-utils';
 import { useSettings } from '@/contexts/SettingsContext';
 import type { CalendarEvent } from '@/types';
@@ -13,9 +13,9 @@ interface EventCardProps {
 }
 
 export function EventCard({ event, compact = false, onClick }: EventCardProps) {
-  const { t } = useSettings();
+  const { t, timezone, language, use24h } = useSettings();
   const color = colorFor(event);
-  const time = formatTimeCN(new Date(event.startAt));
+  const time = formatTimeTZ(new Date(event.startAt), timezone, language, use24h);
   const label = event.allDay
     ? event.title
     : `${time} ${event.title}`;
@@ -24,7 +24,7 @@ export function EventCard({ event, compact = false, onClick }: EventCardProps) {
     return (
       <div
         onClick={e => { e.stopPropagation(); onClick?.(); }}
-        className={`${color} text-white text-xs rounded px-1 py-0.5 truncate cursor-pointer flex items-center gap-0.5`}
+        className={`${color} text-white text-xs rounded-md px-1.5 py-0.5 truncate cursor-pointer flex items-center gap-0.5 shadow-sm`}
         title={label}
       >
         {event.recurrence && <span className="opacity-75 flex-shrink-0">↺</span>}

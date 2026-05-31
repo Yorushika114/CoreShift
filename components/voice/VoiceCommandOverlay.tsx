@@ -3,12 +3,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSpeechRecognition, type SpeechErrorKind } from '@/lib/voice/useSpeechRecognition';
 import { useTTS } from '@/lib/voice/useTTS';
-import { parseVoiceCommandWithLLM } from '@/lib/voice/parseVoiceCommand';
+import { parseVoiceCommandWithLLM, parseBudgetCreate } from '@/lib/voice/parseVoiceCommand';
 import { matchEvents } from '@/lib/voice/matchEvents';
 import { applyModify } from '@/lib/voice/applyModify';
 import { formatDateCN, formatTimeCN } from '@/lib/calendar/date-utils';
 import { useSettings } from '@/contexts/SettingsContext';
-import type { CalendarEvent, ParsedCommand } from '@/types';
+import type { BudgetProgress, CalendarEvent, ParsedCommand } from '@/types';
 
 interface Props {
   /** create / unknown：把原文交给页面，打开编辑面板预填。 */
@@ -29,7 +29,9 @@ type Result =
   | { kind: 'modify-pick'; events: CalendarEvent[]; pick: (e: CalendarEvent) => void; approximate?: boolean }
   | { kind: 'query'; date: Date; events: CalendarEvent[]; aiSummary?: string }
   | { kind: 'summarize'; summary: string; events: CalendarEvent[]; rangeLabel: string }
-  | { kind: 'create-preview'; parsed: ParsedCommand; original: string };
+  | { kind: 'create-preview'; parsed: ParsedCommand; original: string }
+  | { kind: 'budget-progress'; progresses: BudgetProgress[] }
+  | { kind: 'budget-create-preview'; label: string; keywords: string; targetMinutes: number; original: string };
 
 function dayRange(d: Date): [Date, Date] {
   const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
@@ -71,7 +73,7 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
   const [result, setResult] = useState<Result | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [lang, setLang] = useState<'zh-CN' | 'en-US'>('zh-CN');
+  const [lang, setLang] = useState<'zh-CN' | 'en-US'>(language === 'en' ? 'en-US' : 'zh-CN');
   const [ttsEnabled, setTtsEnabled] = useState(true);
   const [summaryListOpen, setSummaryListOpen] = useState(false);
   const { supported, listening, interimText, error, start, stop } = useSpeechRecognition({
@@ -192,6 +194,37 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
           : '';
         setResult({ kind: 'summarize', summary, events, rangeLabel });
         if (ttsEnabled) speak(summary);
+        return;
+      }
+
+      if (parsed.intent === 'budget_query') {
+        const now = new Date();
+        const day = now.getDay();
+        const diff = day === 0 ? -6 : 1 - day;
+        const weekStart = new Date(now);
+        weekStart.setDate(now.getDate() + diff);
+        weekStart.setHours(0, 0, 0, 0);
+        const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000 - 1);
+        const res = await fetch(`/api/budgets/progress?start=${weekStart.toISOString()}&end=${weekEnd.toISOString()}`);
+        const progresses: BudgetProgress[] = res.ok ? await res.json() : [];
+        setResult({ kind: 'budget-progress', progresses });
+        if (ttsEnabled && progresses.length > 0) {
+          const ttsText = progresses.map(p => {
+            const h = Math.floor(p.actualMinutes / 60);
+            const m = p.actualMinutes % 60;
+            const th = Math.floor(p.targetMinutes / 60);
+            return lang === 'en-US'
+              ? `${p.label}: ${h} hours ${m > 0 ? m + ' minutes' : ''}, goal ${th} hours`
+              : `${p.label}已完成${h}小时${m > 0 ? m + '分钟' : ''}，目标${th}小时`;
+          }).join(lang === 'en-US' ? '. ' : '；');
+          speak(ttsText);
+        }
+        return;
+      }
+
+      if (parsed.intent === 'budget_create') {
+        const bc = parseBudgetCreate(text);
+        setResult({ kind: 'budget-create-preview', ...bc, original: text });
         return;
       }
 
@@ -475,6 +508,151 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
               </>
             )}
 
+            {result.kind === 'budget-progress' && (
+              <>
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs text-emerald-500 font-medium">
+                    {lang === 'en-US' ? t('budgetVoiceTitle') : t('budgetVoiceTitle')}
+                  </p>
+                  <button
+                    onClick={() => setTtsEnabled(v => !v)}
+                    aria-pressed={ttsEnabled}
+                    className={`text-xs px-2 py-0.5 rounded-full border transition ${
+                      ttsEnabled
+                        ? 'border-emerald-300 text-emerald-500 bg-emerald-50'
+                        : 'border-gray-200 text-gray-400 hover:bg-gray-100'
+                    }`}
+                    title={ttsEnabled
+                      ? (lang === 'en-US' ? 'Mute TTS' : '关闭朗读')
+                      : (lang === 'en-US' ? 'Enable TTS' : '开启朗读')}
+                  >
+                    {ttsEnabled ? '🔊' : '🔇'}
+                  </button>
+                </div>
+                {result.progresses.length === 0 ? (
+                  <div className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3">
+                    <p className="text-sm text-gray-500">{t('budgetVoiceEmpty')}</p>
+                    <p className="text-xs text-gray-400 mt-1">{t('budgetVoiceHint')}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {result.progresses.map(p => {
+                      const pct = Math.min(p.percentage, 100);
+                      const done = p.percentage >= 100;
+                      const ah = Math.floor(p.actualMinutes / 60);
+                      const am = p.actualMinutes % 60;
+                      const th = Math.floor(p.targetMinutes / 60);
+                      const tm = p.targetMinutes % 60;
+                      const barColors: Record<string, string> = {
+                        emerald: 'bg-emerald-500', blue: 'bg-blue-500', purple: 'bg-purple-500',
+                        orange: 'bg-orange-400', red: 'bg-red-500', pink: 'bg-pink-500',
+                        indigo: 'bg-indigo-500', yellow: 'bg-yellow-400',
+                      };
+                      const dotColors: Record<string, string> = {
+                        emerald: 'bg-emerald-500', blue: 'bg-blue-500', purple: 'bg-purple-500',
+                        orange: 'bg-orange-400', red: 'bg-red-500', pink: 'bg-pink-500',
+                        indigo: 'bg-indigo-500', yellow: 'bg-yellow-400',
+                      };
+                      const bar = barColors[p.color] ?? 'bg-emerald-500';
+                      const dot = dotColors[p.color] ?? 'bg-emerald-500';
+                      return (
+                        <div key={p.id} className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3">
+                          <div className="flex items-center gap-1.5 mb-1.5">
+                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dot}`} />
+                            <span className="text-sm font-medium text-gray-700">{p.label}</span>
+                            {done && <span className="text-xs text-emerald-600 ml-1">✓</span>}
+                            <span className="ml-auto text-xs text-gray-500">{p.percentage}%</span>
+                          </div>
+                          <div className="h-1.5 bg-gray-200 rounded-full mb-1.5">
+                            <div className={`h-1.5 rounded-full transition-all duration-500 ${bar}`} style={{ width: `${pct}%` }} />
+                          </div>
+                          <div className="flex justify-between text-xs text-gray-500">
+                            <span>
+                              {lang === 'en-US'
+                                ? `${ah}h ${am > 0 ? am + 'm' : ''}`.trim()
+                                : `${ah > 0 ? ah + '小时' : ''}${am > 0 ? am + '分钟' : ah === 0 ? '0分钟' : ''}`}
+                            </span>
+                            <span>
+                              {lang === 'en-US'
+                                ? `/ ${th}h ${tm > 0 ? tm + 'm' : ''}`.trim()
+                                : `/ ${th > 0 ? th + t('budgetHours') : ''}${tm > 0 ? tm + t('budgetMins') : ''}`}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+
+            {result.kind === 'budget-create-preview' && (
+              <>
+                <p className="text-xs text-emerald-500 font-medium">
+                  {lang === 'en-US' ? 'New Weekly Goal' : '新建周目标'}
+                </p>
+                <div className="rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500 w-14 flex-shrink-0">{t('budgetLabel')}</span>
+                    {result.label ? (
+                      <span className="text-sm text-gray-800 font-medium">{result.label}</span>
+                    ) : (
+                      <span className="text-sm text-amber-500 italic">
+                        {lang === 'en-US' ? '(not recognized)' : '（未识别，请补充）'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500 w-14 flex-shrink-0">{t('budgetTarget')}</span>
+                    <span className="text-sm text-gray-800">
+                      {Math.floor(result.targetMinutes / 60)}{t('budgetHours')}
+                      {result.targetMinutes % 60 > 0 ? (result.targetMinutes % 60) + t('budgetMins') : ''}
+                      {lang === 'en-US' ? ' / week' : ' / 周'}
+                    </span>
+                  </div>
+                  {result.keywords && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500 w-14 flex-shrink-0">{t('budgetKeywords')}</span>
+                      <span className="text-sm text-gray-800">{result.keywords}</span>
+                    </div>
+                  )}
+                </div>
+                {!result.label && (
+                  <p className="text-xs text-amber-600 flex items-center gap-1">
+                    <span>⚠</span>
+                    {lang === 'en-US' ? 'Could not extract goal name. Try: "Add exercise goal, 5 hours per week"' : '未能识别目标名称，试试："添加运动目标每周5小时"'}
+                  </p>
+                )}
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    onClick={() => setResult(null)}
+                    className="px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100 rounded-full transition"
+                  >
+                    {t('reenter')}
+                  </button>
+                  {result.label && (
+                    <button
+                      onClick={async () => {
+                        const res = await fetch('/api/budgets', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ label: result.label, keywords: result.keywords, targetMinutes: result.targetMinutes, color: 'emerald' }),
+                        });
+                        if (res.ok) {
+                          setResult(null);
+                          speak(lang === 'en-US' ? `Goal ${result.label} created.` : `已创建目标：${result.label}`);
+                          window.dispatchEvent(new CustomEvent('budget-updated'));
+                        }
+                      }}
+                      className="px-4 py-1.5 text-sm bg-emerald-500 text-white rounded-full hover:bg-emerald-600 transition"
+                    >
+                      {t('confirm')}
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+
             {result.kind === 'create-preview' && (
               <>
                 <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">{t('recognitionResult')}</p>
@@ -482,7 +660,11 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-500 w-10 flex-shrink-0">{t('titleLabel')}</span>
                     <span className="text-sm text-gray-800 font-medium">
-                      {result.parsed.title ?? <span className="text-amber-500 italic">（未识别）</span>}
+                      {result.parsed.title ?? (
+                        <span className="text-amber-500 italic">
+                          {lang === 'zh-CN' ? '（未识别）' : '(not recognized)'}
+                        </span>
+                      )}
                     </span>
                   </div>
                   {result.parsed.startAt && (
