@@ -1,5 +1,34 @@
 import { NextRequest } from 'next/server';
 
+/**
+ * JSON.parse 失败时的降级修复：用正则逐字段提取标量值。
+ * 规避两类 LLM 常见问题：字符串内未转义的 " 号、响应被 max_tokens 截断。
+ */
+function tryRepairLLMJson(raw: string): Record<string, unknown> | null {
+  const getStr = (key: string): string | null =>
+    raw.match(new RegExp(`"${key}"\\s*:\\s*"([^"]*)"`))?.[1] ?? null;
+  const getBool = (key: string): boolean | null => {
+    const m = raw.match(new RegExp(`"${key}"\\s*:\\s*(true|false)`));
+    return m ? m[1] === 'true' : null;
+  };
+  const intent = getStr('intent');
+  if (!intent) return null;
+  return {
+    intent,
+    title: getStr('title'),
+    startAt: getStr('startAt'),
+    endAt: getStr('endAt'),
+    reminderAt: getStr('reminderAt'),
+    queryRangeStart: getStr('queryRangeStart'),
+    queryRangeEnd: getStr('queryRangeEnd'),
+    hasDate: getBool('hasDate') ?? false,
+    hasTime: getBool('hasTime') ?? false,
+    ambiguities: [],
+    clarificationNeeded: getBool('clarificationNeeded') ?? false,
+    clarificationQuestion: getStr('clarificationQuestion'),
+  };
+}
+
 const SYSTEM_PROMPT = `You are a calendar voice command parser. Parse the user's input into a structured JSON object.
 
 Current UTC time: {NOW}
@@ -80,7 +109,7 @@ export async function POST(req: NextRequest) {
         ],
         response_format: { type: 'json_object' },
         temperature: 0.1,
-        max_tokens: 512,
+        max_tokens: 4096,
       }),
     });
 
@@ -90,10 +119,15 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await upstream.json() as {
-      choices?: { message?: { content?: string } }[];
+      choices?: { message?: { content?: string }; finish_reason?: string }[];
     };
-    const content = data.choices?.[0]?.message?.content;
+    const choice = data.choices?.[0];
+    const content = choice?.message?.content;
     if (!content) return new Response('Empty LLM response', { status: 502 });
+
+    if (choice?.finish_reason === 'length') {
+      console.warn('[LLM parse] hit max_tokens, response truncated. Consider using deepseek-chat or increasing max_tokens.');
+    }
 
     let parsed: Record<string, unknown>;
     try {
@@ -101,8 +135,15 @@ export async function POST(req: NextRequest) {
       const sanitized = content.replace(/:\s*undefined/g, ': null');
       parsed = JSON.parse(sanitized) as Record<string, unknown>;
     } catch {
-      console.error('[LLM parse] malformed JSON from LLM:', content);
-      return new Response('Invalid JSON from LLM', { status: 502 });
+      // 降级：用正则逐字段提取，规避未转义引号和截断问题
+      const repaired = tryRepairLLMJson(content);
+      if (repaired) {
+        console.warn('[LLM parse] JSON repair succeeded, raw:', content);
+        parsed = repaired;
+      } else {
+        console.error('[LLM parse] malformed JSON from LLM:', content);
+        return new Response('Invalid JSON from LLM', { status: 502 });
+      }
     }
     if (!Array.isArray(parsed.ambiguities)) parsed.ambiguities = [];
 
