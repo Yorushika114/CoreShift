@@ -14,10 +14,11 @@ export async function PUT(
     const event = await updateEvent(params.id, body);
     eventBus.broadcast('updated');
 
+    const visitorId = request.cookies.get('visitor_id')?.value;
     prisma.event.findUnique({ where: { id: params.id }, select: { googleEventId: true, googleCalendarId: true } })
       .then(async (row) => {
         if (row?.googleEventId) {
-          await updateEventInGoogle(row.googleEventId, event, row.googleCalendarId);
+          await updateEventInGoogle(row.googleEventId, event, row.googleCalendarId, visitorId);
         }
       })
       .catch((e) => console.error('Google update failed:', e));
@@ -39,6 +40,8 @@ export async function DELETE(
       select: { googleEventId: true, googleCalendarId: true, icsSeriesUid: true, startAt: true },
     });
 
+    const visitorId = request.cookies.get('visitor_id')?.value;
+
     if (mode === 'future' && row?.icsSeriesUid) {
       // Delete this instance + all future instances of the same ICS series
       const futureRows = await prisma.event.findMany({
@@ -51,14 +54,14 @@ export async function DELETE(
       eventBus.broadcast('deleted');
       for (const r of futureRows) {
         if (r.googleEventId) {
-          deleteEventFromGoogle(r.googleEventId, r.googleCalendarId).catch((e) => console.error('Google delete failed:', e));
+          deleteEventFromGoogle(r.googleEventId, r.googleCalendarId, visitorId).catch((e) => console.error('Google delete failed:', e));
         }
       }
     } else {
       await deleteEvent(params.id);
       eventBus.broadcast('deleted');
       if (row?.googleEventId) {
-        deleteEventFromGoogle(row.googleEventId, row.googleCalendarId).catch((e) => console.error('Google delete failed:', e));
+        deleteEventFromGoogle(row.googleEventId, row.googleCalendarId, visitorId).catch((e) => console.error('Google delete failed:', e));
       }
     }
 

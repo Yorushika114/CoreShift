@@ -35,8 +35,9 @@ export async function POST(request: NextRequest) {
     const event = await createEvent(body);
     eventBus.broadcast('created');
 
+    const visitorId = request.cookies.get('visitor_id')?.value;
     // Real-time push to Google Calendar (non-blocking on failure)
-    pushEventToGoogle(event)
+    pushEventToGoogle(event, visitorId)
       .then(async (googleId) => {
         if (googleId) {
           await prisma.event.update({
