@@ -48,6 +48,7 @@ function detectIntent(text: string): ParsedCommand['intent'] {
   const isReminderPhrase = /提前(\d+|[一二三四五六七八九十百]+)(分钟|小时)|提前半小时/.test(text);
   // 修改：用"改到/改成/改为/改期"等动补结构，不含裸"改"（避免"改稿"这类标题误判）
   if (!isReminderPhrase && /修改|改到|改成|改为|改期|推迟|提前|延期/.test(text)) return 'modify';
+  if (/总结|摘要|回顾|汇总|\bsummarize\b|\bsummary\b/i.test(text)) return 'summarize';
   if (/添加|新建|创建|加|安排|提醒|开会|会议|约|记/.test(text)) return 'create';
   return 'create';
 }
@@ -151,6 +152,26 @@ export async function parseVoiceCommandWithLLM(
     if (!Array.isArray(parsed.ambiguities)) parsed.ambiguities = [];
     return parsed;
   } catch {
-    return parseVoiceCommand(text, fallbackDate);
+    const fallback = parseVoiceCommand(text, fallbackDate);
+    if (fallback.intent === 'summarize') {
+      const now = fallbackDate;
+      let queryRangeStart: string;
+      let queryRangeEnd: string;
+      if (/今天|今日|\btoday\b/i.test(text)) {
+        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+        const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+        queryRangeStart = start.toISOString();
+        queryRangeEnd = end.toISOString();
+      } else {
+        const day = now.getDay();
+        const mondayOffset = day === 0 ? -6 : 1 - day;
+        const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOffset, 0, 0, 0);
+        const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000 - 1);
+        queryRangeStart = weekStart.toISOString();
+        queryRangeEnd = weekEnd.toISOString();
+      }
+      return { ...fallback, queryRangeStart, queryRangeEnd };
+    }
+    return fallback;
   }
 }
