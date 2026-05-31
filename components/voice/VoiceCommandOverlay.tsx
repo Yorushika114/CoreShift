@@ -20,6 +20,7 @@ interface Props {
   /** 删除成功后通知页面刷新。 */
   onChanged: () => void;
   onClose: () => void;
+  initialText?: string;
 }
 
 
@@ -56,7 +57,7 @@ async function fetchRange([start, end]: [Date, Date]): Promise<CalendarEvent[]> 
   return res.json();
 }
 
-export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, onClose }: Props) {
+export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, onClose, initialText }: Props) {
   const { t, language, timezone } = useSettings();
   const ERROR_MESSAGES: Record<SpeechErrorKind, string> = {
     unsupported: language === 'zh' ? '当前浏览器不支持语音识别' : 'Voice recognition not supported in this browser',
@@ -86,6 +87,13 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
     if (supported) start();
     else setTextMode(true);
   }, [supported, start]);
+
+  useEffect(() => {
+    if (!initialText) return;
+    stop();
+    setTextMode(true);
+    setTextInput(initialText);
+  }, [initialText, stop]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
