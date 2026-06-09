@@ -418,7 +418,7 @@ function CalendarPageInner() {
   return (
     <div className="flex h-screen font-sans" style={{ background: 'linear-gradient(135deg, #eef2ff 0%, #f5f3ff 40%, #fdf4ff 100%)' }}>
       {/* Left Sidebar */}
-      <aside className="w-64 border-r border-indigo-100/60 bg-white/80 backdrop-blur-sm flex flex-col flex-shrink-0 overflow-hidden">
+      <aside className="hidden md:flex w-64 border-r border-indigo-100/60 bg-white/80 backdrop-blur-sm flex-col flex-shrink-0 overflow-hidden">
         <div className="flex flex-col gap-3 p-4 pb-2">
           <div className="flex items-center gap-2">
             <span className="text-2xl">🗓</span>
@@ -478,7 +478,7 @@ function CalendarPageInner() {
 
       {/* Main Area */}
       <main
-        className="flex-1 flex flex-col overflow-hidden"
+        className="flex-1 flex flex-col overflow-hidden pb-16 md:pb-0"
         style={
           bgType !== 'none' && bgValue
             ? { backgroundImage: `url(${bgValue})`, backgroundSize: 'cover', backgroundPosition: 'center' }
@@ -548,7 +548,9 @@ function CalendarPageInner() {
               <button
                 key={v}
                 onClick={() => { setView(v); setShowYearPicker(false); }}
-                className={`px-3 py-1 text-sm transition-colors ${
+                className={`px-2 md:px-3 py-1 text-xs md:text-sm transition-colors ${
+                  v === 'year' ? 'hidden md:block' : ''
+                } ${
                   view === v
                     ? 'bg-blue-600 text-white'
                     : 'text-gray-600 hover:bg-gray-100'
@@ -637,6 +639,31 @@ function CalendarPageInner() {
         <span className="text-xl">🎙</span>
         <span className="text-sm font-medium">{t('voiceInputFab')}</span>
       </button>
+
+      {/* 移动端底部 Action Bar（md 以上隐藏，FAB 替代） */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-[90] bg-white/95 backdrop-blur-sm border-t border-gray-200 flex items-center justify-around px-4 py-2">
+        <button
+          onClick={goToToday}
+          className="flex flex-col items-center gap-0.5 px-4 py-1.5 text-gray-600 hover:text-indigo-600 transition"
+        >
+          <span className="text-lg">📅</span>
+          <span className="text-xs">{t('today')}</span>
+        </button>
+        <button
+          onClick={() => openVoiceWithDraft()}
+          className="flex flex-col items-center gap-0.5 px-5 py-2 bg-indigo-500 text-white rounded-2xl hover:bg-indigo-600 active:scale-95 transition shadow-sm shadow-indigo-200"
+        >
+          <span className="text-lg">🎙</span>
+          <span className="text-xs font-medium">{t('voiceInputFab')}</span>
+        </button>
+        <button
+          onClick={() => openCreateEditor()}
+          className="flex flex-col items-center gap-0.5 px-4 py-1.5 text-gray-600 hover:text-indigo-600 transition"
+        >
+          <span className="text-lg font-light">＋</span>
+          <span className="text-xs">{t('newBtn')}</span>
+        </button>
+      </div>
 
       {/* Undo toast */}
       {undoToast && (
