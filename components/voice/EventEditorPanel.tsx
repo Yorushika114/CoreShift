@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { parseVoiceCommandWithLLM } from '@/lib/voice/parseVoiceCommand';
+import { parseVoiceCommandWithLLM, parseVoiceCommand } from '@/lib/voice/parseVoiceCommand';
 import { useSpeechRecognition } from '@/lib/voice/useSpeechRecognition';
 import { formatDate, formatTime, formatTimeCN } from '@/lib/calendar/date-utils';
 import { EVENT_COLOR_OPTIONS } from '@/lib/calendar/color-utils';
@@ -69,7 +69,7 @@ export function EventEditorPanel({
   onSaved,
   onDeleted,
 }: Props) {
-  const { t, language } = useSettings();
+  const { t, language, timezone } = useSettings();
   const nlpLang: 'zh-CN' | 'en-US' = language === 'en' ? 'en-US' : 'zh-CN';
   const REMINDER_OPTIONS = [
     { label: t('noReminder'), value: '' },
@@ -83,7 +83,6 @@ export function EventEditorPanel({
   ];
   const isEdit = !!event;
   const [tab, setTab] = useState<Tab>(isEdit ? 'manual' : 'quick');
-  const { timezone } = useSettings();
 
   // quick tab state
   const [nlpInput, setNlpInput] = useState(initialText ?? '');
@@ -138,14 +137,25 @@ export function EventEditorPanel({
     inputRef.current?.focus();
   }, []);
 
+  // 用 ref 持有当前 lang/timezone，避免 context 每次重渲染都触发 effect 重启
+  const nlpLangRef = useRef(nlpLang);
+  const timezoneRef = useRef(timezone);
+  nlpLangRef.current = nlpLang;
+  timezoneRef.current = timezone;
+
   useEffect(() => {
     const text = nlpInput.trim();
     if (!text) { setParsed(null); return; }
     let cancelled = false;
-    void parseVoiceCommandWithLLM(text, nlpLang, defaultStartAt ?? new Date(), timezone)
-      .then(result => { if (!cancelled) setParsed(result); });
+    // 立即用 rule-based 解析，让用户马上看到结果；LLM 完成后再覆盖更新
+    const immediate = parseVoiceCommand(text, new Date(), nlpLangRef.current);
+    if (!cancelled) setParsed(immediate);
+    parseVoiceCommandWithLLM(text, nlpLangRef.current, new Date(), timezoneRef.current)
+      .then(result => { if (!cancelled) setParsed(result); })
+      .catch(() => { /* rule-based result already shown */ });
     return () => { cancelled = true; };
-  }, [defaultStartAt, nlpInput, nlpLang, timezone]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nlpInput]);
 
   // Keep end date in sync when start date changes (only if they were equal)
   function handleManualDateChange(val: string) {
@@ -248,11 +258,21 @@ export function EventEditorPanel({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error('保存失败');
+      if (res.status === 401) {
+        setError(language === 'zh' ? '会话已过期，请刷新页面后重试' : 'Session expired, please refresh the page');
+        setSaving(false);
+        return;
+      }
+      if (!res.ok) {
+        let detail = '';
+        try { const j = await res.json(); detail = j.detail || j.error || ''; } catch {}
+        throw new Error(detail || '保存失败');
+      }
       const saved: CalendarEvent = await res.json();
       onSaved(saved);
-    } catch {
-      setError(t('saveFailed'));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '';
+      setError(msg || t('saveFailed'));
       setSaving(false);
     }
   }
