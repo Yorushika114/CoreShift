@@ -100,8 +100,8 @@ function CalendarPageInner() {
       const data = await res.json();
       if (res.ok) {
         setSyncMsg(language === 'zh'
-          ? `同步完成：拉取 ${data.pulled} 个，推送 ${data.pushed} 个`
-          : `Sync done: pulled ${data.pulled}, pushed ${data.pushed}`);
+          ? `同步完成：拉取 ${data.pulled} 个，推送 ${data.pushed} 个，删除 ${data.deleted} 个`
+          : `Sync done: pulled ${data.pulled}, pushed ${data.pushed}, deleted ${data.deleted}`);
         fetchEvents(viewDate, view);
       } else {
         setSyncMsg(language === 'zh' ? '同步失败，请重试' : 'Sync failed, please retry');
