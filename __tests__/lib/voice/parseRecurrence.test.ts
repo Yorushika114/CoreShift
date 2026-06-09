@@ -56,6 +56,16 @@ describe('重复结束条件 - 截止日期', () => {
     expect(d.getMonth()).toBe(6);
     expect(d.getDate()).toBe(15);
   });
+
+  it('同月但日期已过 → 应推到明年 (到6月5号，当前6月9日)', () => {
+    const r = parseVoiceCommand('每周开会到6月5号', BASE);
+    expect(r.recurrenceEndAt).toBeDefined();
+    const d = new Date(r.recurrenceEndAt!);
+    // BASE = 2026-06-09，"到6月5号"应推到 2027-06-05
+    expect(d.getFullYear()).toBe(2027);
+    expect(d.getMonth()).toBe(5); // 6月
+    expect(d.getDate()).toBe(5);
+  });
 });
 
 describe('重复结束条件 - 次数', () => {

@@ -53,7 +53,9 @@ function extractRecurrenceEnd(
   if (dateMatch) {
     const month = parseInt(dateMatch[1]) - 1;
     const day = parseInt(dateMatch[2]);
-    const year = month < fallback.getMonth() ? fallback.getFullYear() + 1 : fallback.getFullYear();
+    const year = (month < fallback.getMonth() || (month === fallback.getMonth() && day < fallback.getDate()))
+      ? fallback.getFullYear() + 1
+      : fallback.getFullYear();
     const endDate = new Date(year, month, day, 23, 59, 59);
     return { recurrenceEndAt: endDate.toISOString(), recurrenceCount: null };
   }
