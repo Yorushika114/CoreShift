@@ -468,6 +468,11 @@ function CalendarPageInner() {
             syncMsg={syncMsg}
             onSync={handleSync}
             onDisconnect={handleDisconnect}
+            onNavigate={(date) => {
+              setViewDate(date);
+              setSelectedDate(date);
+              setView('month');
+            }}
           />
         </div>
       </aside>
