@@ -72,3 +72,12 @@ model EventException {
 
   @@unique([eventId, date])
 }
+
+model PendingGoogleDelete {
+  id               String   @id @default(cuid())
+  googleEventId    String
+  googleCalendarId String?
+  visitorId        String
+  userId           String
+  createdAt        DateTime @default(now())
+}
