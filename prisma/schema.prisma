@@ -50,4 +50,5 @@ model Session {
   createdAt              DateTime @default(now())
   selectedCalendarIds    String   @default("[]")
   defaultWriteCalendarId String   @default("primary")
+  syncDirection          String   @default("both")
 }
