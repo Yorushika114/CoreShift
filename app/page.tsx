@@ -1,7 +1,7 @@
 // app/page.tsx
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { MiniCalendar } from '@/components/calendar/MiniCalendar';
 import { MonthGrid } from '@/components/calendar/MonthGrid';
 import { YearGrid } from '@/components/calendar/YearGrid';
@@ -24,6 +24,11 @@ import type { CalendarEvent } from '@/types';
 
 type ViewMode = 'year' | 'month' | 'week' | 'day';
 
+type UndoAction =
+  | { type: 'create'; event: CalendarEvent }
+  | { type: 'delete'; event: CalendarEvent }
+  | { type: 'edit'; before: CalendarEvent; after: CalendarEvent };
+
 const VIEW_TAB_VALUES: ViewMode[] = ['year', 'month', 'week', 'day'];
 
 interface EditorState {
@@ -35,9 +40,15 @@ interface EditorState {
 
 function CalendarPageInner() {
   const { bgType, bgValue, t, language } = useSettings();
-  const [view, setView] = useState<ViewMode>('week');
-  const [selectedDate, setSelectedDate] = useState(() => new Date());
-  const [viewDate, setViewDate] = useState(() => new Date());
+  const [view, setView] = useState<ViewMode>(() => {
+    try { return (localStorage.getItem('cs_view') as ViewMode) ?? 'week'; } catch { return 'week'; }
+  });
+  const [selectedDate, setSelectedDate] = useState(() => {
+    try { const s = localStorage.getItem('cs_viewDate'); return s ? new Date(s) : new Date(); } catch { return new Date(); }
+  });
+  const [viewDate, setViewDate] = useState(() => {
+    try { const s = localStorage.getItem('cs_viewDate'); return s ? new Date(s) : new Date(); } catch { return new Date(); }
+  });
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [showYearPicker, setShowYearPicker] = useState(false);
@@ -51,10 +62,35 @@ function CalendarPageInner() {
   const [googleConnected, setGoogleConnected] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const undoStackRef = useRef<UndoAction[]>([]);
+  const [undoToast, setUndoToast] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/auth/status').then(r => r.json()).then(d => setGoogleConnected(d.connected));
+    fetch('/api/auth/status').then(r => r.json()).then(d => {
+      setGoogleConnected(d.connected);
+      if (d.connected) {
+        // 页面加载时静默同步一次，拉取 Google 日历最新事项
+        fetch('/api/sync', { method: 'POST' }).catch(() => {});
+      }
+    });
   }, []);
+
+  // 每 5 分钟后台静默同步，保持 Google 日历事项最新
+  useEffect(() => {
+    if (!googleConnected) return;
+    const id = setInterval(() => {
+      fetch('/api/sync', { method: 'POST' }).catch(() => {});
+    }, 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [googleConnected]);
+
+  useEffect(() => {
+    try { localStorage.setItem('cs_view', view); } catch {}
+  }, [view]);
+
+  useEffect(() => {
+    try { localStorage.setItem('cs_viewDate', viewDate.toISOString()); } catch {}
+  }, [viewDate]);
 
   async function handleSync() {
     setSyncing(true);
@@ -77,6 +113,17 @@ function CalendarPageInner() {
       setTimeout(() => setSyncMsg(null), 4000);
     }
   }
+
+  function pushUndo(action: UndoAction) {
+    undoStackRef.current = [...undoStackRef.current.slice(-19), action];
+  }
+
+  function showUndoToast(msg: string) {
+    setUndoToast(msg);
+    setTimeout(() => setUndoToast(null), 3000);
+  }
+
+  const handleUndoRef = useRef<() => Promise<void>>(async () => {});
 
   async function handleDisconnect(deleteEvents: boolean) {
     await fetch('/api/auth/google/disconnect', {
@@ -263,7 +310,57 @@ function CalendarPageInner() {
     fetchEvents(viewDate, view);
   }
 
+  async function handleUndo() {
+    const stack = undoStackRef.current;
+    if (stack.length === 0) return;
+    const action = stack[stack.length - 1];
+    undoStackRef.current = stack.slice(0, -1);
+    try {
+      if (action.type === 'create') {
+        await fetch(`/api/events/${action.event.id}`, { method: 'DELETE' });
+        showUndoToast(`已撤销：创建「${action.event.title}」`);
+      } else if (action.type === 'delete') {
+        await fetch('/api/events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(action.event),
+        });
+        showUndoToast(`已撤销：删除「${action.event.title}」`);
+      } else {
+        await fetch(`/api/events/${action.before.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(action.before),
+        });
+        showUndoToast(`已撤销：修改「${action.after.title}」`);
+      }
+      fetchEvents(viewDate, view);
+    } catch {
+      undoStackRef.current = stack;
+    }
+  }
+
+  useEffect(() => {
+    handleUndoRef.current = handleUndo;
+  });
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        handleUndoRef.current();
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
   function handleEditorSaved(saved: CalendarEvent) {
+    if (editor.event) {
+      pushUndo({ type: 'edit', before: editor.event, after: saved });
+    } else {
+      pushUndo({ type: 'create', event: saved });
+    }
     const eventDate = new Date(saved.startAt);
     setEditor({ open: false });
     // 跳转到新事件所在日期+时刻，保证创建/修改后立即可见（事件可能落在当前视图范围/可视区外）
@@ -275,7 +372,8 @@ function CalendarPageInner() {
     fetchEvents(eventDate, nextView);
   }
 
-  function handleEditorDeleted() {
+  function handleEditorDeleted(deletedEvent: CalendarEvent) {
+    pushUndo({ type: 'delete', event: deletedEvent });
     setEditor({ open: false });
     fetchEvents(viewDate, view);
   }
@@ -309,10 +407,6 @@ function CalendarPageInner() {
 
   const prevLabel = view === 'year' ? t('prevYear') : view === 'month' ? t('prevMonth') : view === 'week' ? t('prevWeek') : t('prevDay');
   const nextLabel = view === 'year' ? t('nextYear') : view === 'month' ? t('nextMonth') : view === 'week' ? t('nextWeek') : t('nextDay');
-  const demoCommands = language === 'en'
-    ? ['Meeting tomorrow at 3pm', "What's on tomorrow", 'Move tomorrow meeting to 4pm']
-    : ['明天下午三点提醒我开组会', '明天有什么安排', '把明天下午三点的组会改到四点'];
-
   function openVoiceWithDraft(command?: string) {
     setVoiceDraft(command);
     setVoiceOpen(true);
@@ -368,24 +462,7 @@ function CalendarPageInner() {
             {t('voiceInput')}
           </button>
 
-          <div className="rounded-lg border border-indigo-100 bg-indigo-50/70 p-3">
-            <p className="mb-2 text-xs font-medium text-indigo-500">
-              {language === 'en' ? 'Quick demo' : '快速演示'}
-            </p>
-            <div className="flex flex-col gap-1.5">
-              {demoCommands.map(command => (
-                <button
-                  key={command}
-                  onClick={() => openVoiceWithDraft(command)}
-                  className="w-full rounded-md bg-white/80 px-2.5 py-1.5 text-left text-xs leading-relaxed text-gray-600 hover:bg-white hover:text-indigo-600 transition"
-                >
-                  {command}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <SettingsPanel
+<SettingsPanel
             googleConnected={googleConnected}
             syncing={syncing}
             syncMsg={syncMsg}
@@ -529,7 +606,7 @@ function CalendarPageInner() {
           initialText={editor.initialText}
           onClose={() => setEditor({ open: false })}
           onSaved={handleEditorSaved}
-          onDeleted={handleEditorDeleted}
+          onDeleted={(ev) => handleEditorDeleted(ev)}
         />
       )}
 
@@ -545,6 +622,14 @@ function CalendarPageInner() {
             setVoiceDraft(undefined);
           }}
         />
+      )}
+
+      {/* Undo toast */}
+      {undoToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[110] flex items-center gap-3 bg-gray-800 text-white text-sm px-4 py-2.5 rounded-full shadow-lg animate-fade-in">
+          <span>↩</span>
+          <span>{undoToast}</span>
+        </div>
       )}
 
       {/* Reminder toasts */}
