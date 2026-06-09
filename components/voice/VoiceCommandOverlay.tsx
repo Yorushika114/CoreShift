@@ -499,22 +499,35 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
                 )}
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">{t('confirmDeleteTitle')}</p>
-                  {result.events.length > 0 && !multiSelectMode && (
-                    <button
-                      onClick={() => setMultiSelectMode(true)}
-                      className="text-xs text-blue-500 hover:text-blue-700 transition"
-                    >
-                      {lang === 'zh-CN' ? '多选' : 'Select'}
-                    </button>
-                  )}
-                  {multiSelectMode && (
-                    <button
-                      onClick={() => { setMultiSelectMode(false); setSelectedIds(new Set()); }}
-                      className="text-xs text-gray-400 hover:text-gray-600 transition"
-                    >
-                      {lang === 'zh-CN' ? '取消多选' : 'Cancel'}
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {result.events.length > 0 && !multiSelectMode && (
+                      <button
+                        onClick={() => setMultiSelectMode(true)}
+                        className="text-xs text-blue-500 hover:text-blue-700 transition"
+                      >
+                        {lang === 'zh-CN' ? '多选' : 'Select'}
+                      </button>
+                    )}
+                    {multiSelectMode && (
+                      <>
+                        <button
+                          onClick={handleBatchDelete}
+                          disabled={selectedIds.size === 0 || batchDeleting}
+                          className="text-xs px-3 py-1 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                        >
+                          {batchDeleting
+                            ? (lang === 'zh-CN' ? '删除中...' : 'Deleting...')
+                            : (lang === 'zh-CN' ? `删除选中（${selectedIds.size}）` : `Delete (${selectedIds.size})`)}
+                        </button>
+                        <button
+                          onClick={() => { setMultiSelectMode(false); setSelectedIds(new Set()); }}
+                          className="text-xs text-gray-400 hover:text-gray-600 transition"
+                        >
+                          {lang === 'zh-CN' ? '取消多选' : 'Cancel'}
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
                 {multiSelectMode && result.events.length > 0 && (
                   <div className="flex items-center gap-2 px-1">
@@ -574,19 +587,6 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
                     ))
                   )}
                 </div>
-                {multiSelectMode && (
-                  <div className="flex justify-end pt-1">
-                    <button
-                      onClick={handleBatchDelete}
-                      disabled={selectedIds.size === 0 || batchDeleting}
-                      className="px-4 py-1.5 text-sm bg-red-500 text-white rounded-full hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed transition"
-                    >
-                      {batchDeleting
-                        ? (lang === 'zh-CN' ? '删除中...' : 'Deleting...')
-                        : (lang === 'zh-CN' ? `删除选中（${selectedIds.size}）` : `Delete (${selectedIds.size})`)}
-                    </button>
-                  </div>
-                )}
               </>
             )}
 
