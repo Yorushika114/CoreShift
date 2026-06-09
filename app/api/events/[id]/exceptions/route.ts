@@ -23,32 +23,36 @@ export async function POST(
     return NextResponse.json({ error: 'date is required' }, { status: 400 });
   }
 
-  const event = await prisma.event.findUnique({
-    where: { id: params.id, userId: auth.userId },
-  });
-  if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+  try {
+    const event = await prisma.event.findUnique({
+      where: { id: params.id, userId: auth.userId },
+    });
+    if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 });
 
-  const exception = await prisma.eventException.upsert({
-    where: { eventId_date: { eventId: params.id, date: new Date(body.date) } },
-    create: {
-      eventId: params.id,
-      date: new Date(body.date),
-      isDeleted: body.isDeleted ?? false,
-      title: body.title ?? null,
-      startAt: body.startAt ? new Date(body.startAt) : null,
-      endAt: body.endAt ? new Date(body.endAt) : null,
-      reminderAt: body.reminderAt ? new Date(body.reminderAt) : null,
-      color: body.color ?? null,
-    },
-    update: {
-      isDeleted: body.isDeleted ?? false,
-      title: body.title ?? null,
-      startAt: body.startAt ? new Date(body.startAt) : null,
-      endAt: body.endAt ? new Date(body.endAt) : null,
-      reminderAt: body.reminderAt ? new Date(body.reminderAt) : null,
-      color: body.color ?? null,
-    },
-  });
+    const exception = await prisma.eventException.upsert({
+      where: { eventId_date: { eventId: params.id, date: new Date(body.date) } },
+      create: {
+        eventId: params.id,
+        date: new Date(body.date),
+        isDeleted: body.isDeleted ?? false,
+        title: body.title ?? null,
+        startAt: body.startAt ? new Date(body.startAt) : null,
+        endAt: body.endAt ? new Date(body.endAt) : null,
+        reminderAt: body.reminderAt ? new Date(body.reminderAt) : null,
+        color: body.color ?? null,
+      },
+      update: {
+        isDeleted: body.isDeleted ?? false,
+        title: body.title ?? null,
+        startAt: body.startAt ? new Date(body.startAt) : null,
+        endAt: body.endAt ? new Date(body.endAt) : null,
+        reminderAt: body.reminderAt ? new Date(body.reminderAt) : null,
+        color: body.color ?? null,
+      },
+    });
 
-  return NextResponse.json(exception, { status: 201 });
+    return NextResponse.json(exception, { status: 201 });
+  } catch (e) {
+    return NextResponse.json({ error: 'Failed to save exception' }, { status: 500 });
+  }
 }

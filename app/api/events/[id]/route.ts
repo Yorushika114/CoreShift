@@ -20,7 +20,17 @@ export async function PUT(
   try {
     const body = await request.json();
 
+    if (mode === 'this' && !instanceDateStr) {
+      return NextResponse.json({ error: 'Virtual instance ID required for mode=this' }, { status: 400 });
+    }
+    if (mode === 'future' && !instanceDateStr) {
+      return NextResponse.json({ error: 'Virtual instance ID required for mode=future' }, { status: 400 });
+    }
+
     if (mode === 'this' && instanceDateStr) {
+      const ownerCheck = await prisma.event.findUnique({ where: { id: realId, userId: auth.userId } });
+      if (!ownerCheck) return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+
       const exception = await prisma.eventException.upsert({
         where: { eventId_date: { eventId: realId, date: new Date(instanceDateStr) } },
         create: {
@@ -104,6 +114,10 @@ export async function DELETE(
     const mode = request.nextUrl.searchParams.get('mode');
     const instanceDateStr = params.id.includes('::') ? params.id.split('::')[1] : null;
     const realId = params.id.includes('::') ? params.id.split('::')[0] : params.id;
+
+    if (mode === 'this' && !instanceDateStr) {
+      return NextResponse.json({ error: 'Virtual instance ID required for mode=this' }, { status: 400 });
+    }
 
     if (mode === 'this' && instanceDateStr) {
       const row = await prisma.event.findUnique({
