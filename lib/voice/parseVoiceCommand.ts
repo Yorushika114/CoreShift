@@ -1,7 +1,7 @@
 import { parseChineseTime, extractReminderOffset } from './parseChineseTime';
 import type { ParsedCommand } from '@/types';
 
-/** 从文本提取重复频率 */
+/** 从文本提取重复频率。"共N周/天/月"也隐含频率 */
 function extractRecurrence(text: string, lang: 'zh-CN' | 'en-US'): 'daily' | 'weekly' | 'monthly' | null {
   if (lang === 'en-US') {
     if (/every\s+day|daily/i.test(text)) return 'daily';
@@ -12,7 +12,26 @@ function extractRecurrence(text: string, lang: 'zh-CN' | 'en-US'): 'daily' | 'we
   if (/每天|每日/.test(text)) return 'daily';
   if (/每周|每星期/.test(text)) return 'weekly';
   if (/每月|每个月/.test(text)) return 'monthly';
+  // 隐含频率：共N周 → weekly，共N天 → daily，共N个月 → monthly
+  if (/(?:共|持续)[\d一二三四五六七八九十两百]+周/.test(text)) return 'weekly';
+  if (/(?:共|持续)[\d一二三四五六七八九十两百]+天/.test(text)) return 'daily';
+  if (/(?:共|持续)[\d一二三四五六七八九十两百]+个?月/.test(text)) return 'monthly';
   return null;
+}
+
+const CN_DIGITS_RE = '[\\d一二三四五六七八九十两百]+';
+
+function parseCnNum(s: string): number {
+  if (/^\d+$/.test(s)) return parseInt(s, 10);
+  // 简单汉字数字：十→10, 二十→20, etc.
+  const map: Record<string, number> = { 一:1,二:2,三:3,四:4,五:5,六:6,七:7,八:8,九:9,十:10,两:2,百:100 };
+  let n = 0; let cur = 0;
+  for (const c of s) {
+    if (c === '十') { n += (cur === 0 ? 1 : cur) * 10; cur = 0; }
+    else if (c === '百') { n += (cur === 0 ? 1 : cur) * 100; cur = 0; }
+    else cur = map[c] ?? cur;
+  }
+  return n + cur || 0;
 }
 
 /** 从文本提取重复截止条件 */
@@ -20,16 +39,28 @@ function extractRecurrenceEnd(
   text: string,
   fallback: Date,
 ): { recurrenceEndAt: string | null; recurrenceCount: number | null } {
-  // 次数：共N次 / 做N次
-  const countMatch = text.match(/(?:共|做)(\d+)次/);
+  // 次数：共N次 / 做N次（阿拉伯或中文数字）
+  const countMatch = text.match(new RegExp(`(?:共|做)(${CN_DIGITS_RE})次`));
   if (countMatch) {
-    return { recurrenceEndAt: null, recurrenceCount: parseInt(countMatch[1]) };
+    return { recurrenceEndAt: null, recurrenceCount: parseCnNum(countMatch[1]) };
   }
 
-  // 时长换算：持续N个月 / 做N个月（次数匹配优先，避免和"做N次"冲突）
-  const durationMatch = text.match(/(?:持续|做)(\d+)个?月/);
+  // 共N周 → 以周为单位的次数（隐含每周一次）
+  const weeksMatch = text.match(new RegExp(`(?:共|持续)(${CN_DIGITS_RE})周`));
+  if (weeksMatch) {
+    return { recurrenceEndAt: null, recurrenceCount: parseCnNum(weeksMatch[1]) };
+  }
+
+  // 共N天 → 以天为单位的次数
+  const daysMatch = text.match(new RegExp(`(?:共|持续)(${CN_DIGITS_RE})天`));
+  if (daysMatch) {
+    return { recurrenceEndAt: null, recurrenceCount: parseCnNum(daysMatch[1]) };
+  }
+
+  // 时长换算：持续N个月 / 共N个月（次数匹配优先，避免和"做N次"冲突）
+  const durationMatch = text.match(new RegExp(`(?:持续|共)(${CN_DIGITS_RE})个?月`));
   if (durationMatch) {
-    const months = parseInt(durationMatch[1]);
+    const months = parseCnNum(durationMatch[1]);
     const endDate = new Date(fallback);
     endDate.setDate(1);
     endDate.setMonth(endDate.getMonth() + months);
@@ -393,6 +424,8 @@ export async function parseVoiceCommandWithLLM(
   try {
     const resolvedTz = tz
       ?? (typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'Asia/Shanghai');
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
     const res = await fetch('/api/llm/parse', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -402,7 +435,9 @@ export async function parseVoiceCommandWithLLM(
         now: fallbackDate.toISOString(),
         tz: resolvedTz,
       }),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
     if (!res.ok) throw new Error(`LLM parse failed: ${res.status}`);
     const parsed = await res.json() as LLMParsedCommand;
     if (!Array.isArray(parsed.ambiguities)) parsed.ambiguities = [];
