@@ -118,6 +118,16 @@ export function DayView({ date, events, focusTime, onSlotClick, onEventClick }: 
           style={{ height: `${48 * SLOT_HEIGHT}px` }}
           onClick={handleGridClick}
         >
+          {/* Empty state overlay */}
+          {timedEvents.length === 0 && allDayEvents.length === 0 && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+              <div className="text-center px-8 py-6 rounded-2xl bg-white/70 backdrop-blur-sm border border-indigo-100/50 shadow-sm">
+                <div className="text-3xl mb-2">🎙</div>
+                <p className="text-sm text-gray-500 mb-1">{t('emptyStateHint')}</p>
+                <p className="text-sm text-indigo-500 font-medium">「{t('emptyStateExample')}」</p>
+              </div>
+            </div>
+          )}
           {/* Time slots */}
           {Array.from({ length: 48 }, (_, i) => {
             const hour = Math.floor(i / 2);

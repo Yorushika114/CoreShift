@@ -162,6 +162,8 @@ export const labels = {
     inlineCreateSaving: '保存中…',
     inlineCreateSuccess: '已创建',
     inlineCreateFailed: '创建失败，请重试',
+    emptyStateHint: '说一句话来记事，比如',
+    emptyStateExample: '明天下午三点开组会',
   },
   en: {
     settings: 'Settings',
@@ -314,6 +316,8 @@ export const labels = {
     inlineCreateSaving: 'Saving…',
     inlineCreateSuccess: 'Created',
     inlineCreateFailed: 'Failed to create, please retry',
+    emptyStateHint: 'Try saying something like',
+    emptyStateExample: 'Team meeting tomorrow at 3pm',
   },
 } as const;
 
