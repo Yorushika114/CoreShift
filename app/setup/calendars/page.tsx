@@ -3,6 +3,30 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
+function getLang(): 'zh' | 'en' {
+  if (typeof window === 'undefined') return 'zh';
+  try {
+    return (localStorage.getItem('language') as 'zh' | 'en') ?? 'zh';
+  } catch {
+    return 'zh';
+  }
+}
+
+const SYNC_DIRECTION_LABELS = {
+  zh: {
+    sectionTitle: '同步方向',
+    both: '双向同步（拉取 + 推送）',
+    pull: '仅拉取（Google → CoreShift）',
+    push: '仅推送（CoreShift → Google）',
+  },
+  en: {
+    sectionTitle: 'Sync Direction',
+    both: 'Bidirectional (pull + push)',
+    pull: 'Pull only (Google → CoreShift)',
+    push: 'Push only (CoreShift → Google)',
+  },
+} as const;
+
 interface GoogleCalendar {
   id: string;
   summary: string;
@@ -21,20 +45,31 @@ export default function SetupCalendarsPage() {
   const [error, setError] = useState<string | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
   const [disconnectDialog, setDisconnectDialog] = useState(false);
+  const [syncDirection, setSyncDirection] = useState<'pull' | 'push' | 'both'>('both');
+  const [lang, setLang] = useState<'zh' | 'en'>('zh');
 
   useEffect(() => {
+    const currentLang = getLang();
+    setLang(currentLang);
     fetch('/api/google/calendars')
       .then((r) => r.json())
       .then((data: GoogleCalendar[]) => {
         setCalendars(data);
-        // 默认全选可写日历
         const writeable = data.filter((c) => c.accessRole !== 'reader' && c.accessRole !== 'freeBusyReader');
         setSelected(new Set(writeable.map((c) => c.id)));
         const primary = data.find((c) => c.primary);
         if (primary) setDefaultWrite(primary.id);
       })
-      .catch(() => setError('无法获取日历列表，请检查网络或重新授权'))
+      .catch(() => setError(currentLang === 'zh' ? '无法获取日历列表，请检查网络或重新授权' : 'Failed to load calendars. Check network or re-authorize.'))
       .finally(() => setLoading(false));
+
+    fetch('/api/google/calendars/select/current')
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        const validDirs = ['pull', 'push', 'both'] as const;
+        if (validDirs.includes(data?.syncDirection)) setSyncDirection(data.syncDirection);
+      })
+      .catch(() => {});
   }, []);
 
   function toggle(id: string) {
@@ -74,6 +109,7 @@ export default function SetupCalendarsPage() {
         body: JSON.stringify({
           selectedCalendarIds: Array.from(selected),
           defaultWriteCalendarId: defaultWrite,
+          syncDirection,
         }),
       });
       router.push('/');
@@ -164,6 +200,26 @@ export default function SetupCalendarsPage() {
             </select>
           </div>
         )}
+
+        {/* 同步方向 */}
+        <div>
+          <p className="text-xs text-gray-500 mb-1.5">{SYNC_DIRECTION_LABELS[lang].sectionTitle}</p>
+          <div className="space-y-1.5">
+            {(['both', 'pull', 'push'] as const).map((dir) => (
+              <label key={dir} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                <input
+                  type="radio"
+                  name="syncDirection"
+                  value={dir}
+                  checked={syncDirection === dir}
+                  onChange={() => setSyncDirection(dir)}
+                  className="w-4 h-4 accent-blue-600"
+                />
+                <span className="text-sm text-gray-700">{SYNC_DIRECTION_LABELS[lang][dir]}</span>
+              </label>
+            ))}
+          </div>
+        </div>
 
         {error && <p className="text-xs text-red-500">{error}</p>}
 
