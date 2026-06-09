@@ -148,6 +148,11 @@ export const labels = {
     budgetVoiceTitle: '本周时间目标进度',
     budgetVoiceEmpty: '暂无目标，请在侧边栏添加',
     budgetVoiceHint: '试试：我这周运动了多久 · 学习进度怎么样',
+    // Google sync direction
+    syncDirection: '同步方向',
+    syncDirectionBoth: '双向同步（拉取 + 推送）',
+    syncDirectionPull: '仅拉取（Google → CoreShift）',
+    syncDirectionPush: '仅推送（CoreShift → Google）',
   },
   en: {
     settings: 'Settings',
@@ -286,6 +291,11 @@ export const labels = {
     budgetVoiceTitle: 'Weekly Goal Progress',
     budgetVoiceEmpty: 'No goals set. Add some in the sidebar.',
     budgetVoiceHint: 'Try: How long did I exercise this week · Study progress',
+    // Google sync direction
+    syncDirection: 'Sync Direction',
+    syncDirectionBoth: 'Bidirectional (pull + push)',
+    syncDirectionPull: 'Pull only (Google → CoreShift)',
+    syncDirectionPush: 'Push only (CoreShift → Google)',
   },
 } as const;
 
