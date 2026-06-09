@@ -26,6 +26,12 @@ function tryRepairLLMJson(raw: string): Record<string, unknown> | null {
     ambiguities: [],
     clarificationNeeded: getBool('clarificationNeeded') ?? false,
     clarificationQuestion: getStr('clarificationQuestion'),
+    recurrence: getStr('recurrence'),
+    recurrenceEndAt: getStr('recurrenceEndAt'),
+    recurrenceCount: (() => {
+      const m = raw.match(/"recurrenceCount"\s*:\s*(\d+)/);
+      return m ? parseInt(m[1]) : null;
+    })(),
   };
 }
 
@@ -53,7 +59,10 @@ Use null for missing optional fields — never write the word "undefined":
   "hasTime": true,
   "ambiguities": [],
   "clarificationNeeded": false,
-  "clarificationQuestion": null
+  "clarificationQuestion": null,
+  "recurrence": null,
+  "recurrenceEndAt": null,
+  "recurrenceCount": null
 }
 
 Rules:
@@ -62,6 +71,10 @@ Rules:
 - For "summarize" intent: use when the user asks to summarize, review, or analyze their schedule (e.g. "总结这周行程", "analyze my week", "give me a summary of today"). Set queryRangeStart and queryRangeEnd to cover the requested range. Leave title/startAt/endAt/reminderAt as null.
 - ambiguities: list any assumptions made (e.g. "No date mentioned, defaulted to today"). Use the same language as the user's input
 - clarificationQuestion: only set if title is completely unidentifiable. Use the same language as the user's input
+- recurrence: null | "daily" | "weekly" | "monthly". Set when user says 每天/每日/daily, 每周/每星期/weekly, 每月/每个月/monthly
+- recurrenceEndAt: ISO 8601 end date if user specifies "开到X月X日", "to July 15th", etc. null otherwise
+- recurrenceCount: integer if user says "共N次", "N times", etc. null otherwise
+- If user says "持续N个月" / "for N months", compute recurrenceEndAt = startAt + N months (ISO 8601). Leave recurrenceCount null
 - Output language for all text fields must match the user's input language`;
 
 export async function POST(req: NextRequest) {

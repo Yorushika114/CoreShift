@@ -9,6 +9,8 @@ import { applyModify } from '@/lib/voice/applyModify';
 import { formatDateCN, formatTimeCN } from '@/lib/calendar/date-utils';
 import { useSettings } from '@/contexts/SettingsContext';
 import type { BudgetProgress, CalendarEvent, ParsedCommand } from '@/types';
+import { RecurringActionDialog, type RecurringActionMode } from './RecurringActionDialog';
+import { realEventId } from '@/lib/calendar/recurrence';
 
 interface Props {
   /** create / unknown：把原文交给页面，打开编辑面板预填。 */
@@ -79,6 +81,10 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
   const [summaryListOpen, setSummaryListOpen] = useState(false);
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [recurringDialog, setRecurringDialog] = useState<{
+    action: 'delete' | 'modify';
+    event: CalendarEvent;
+  } | null>(null);
   const [batchDeleting, setBatchDeleting] = useState(false);
   const { supported, listening, interimText, error, start, stop } = useSpeechRecognition({
     lang,
@@ -281,14 +287,14 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
 
       if (parsed.intent === 'modify') {
         if (tier === 'exact' && results.length === 1) {
-          onModify(applyModify(results[0], parsed));
+          handleModifyEvent(applyModify(results[0], parsed));
           return;
         }
         setResult({
           kind: 'modify-pick',
           events: results,
           approximate,
-          pick: (e) => onModify(applyModify(e, parsed)),
+          pick: (e) => handleModifyEvent(applyModify(e, parsed)),
         });
         return;
       }
@@ -312,24 +318,39 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
     if (t) void handleCommand(t);
   }
 
-  async function handleDelete(id: string) {
-    setDeletingId(id);
+  async function doDelete(id: string, mode: RecurringActionMode) {
+    const targetId = mode === 'all' ? realEventId(id) : id;
+    setDeletingId(targetId);
     setActionError(null);
     try {
-      const res = await fetch(`/api/events/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error();
-      speak(language === 'zh' ? '已成功删除' : 'Successfully deleted');
-      onChanged();
-      setResult(prev => {
-        if (!prev || prev.kind !== 'delete') return prev;
-        return { ...prev, events: prev.events.filter(e => e.id !== id) };
+      const res = await fetch(`/api/events/${encodeURIComponent(targetId)}?mode=${mode}`, {
+        method: 'DELETE',
       });
-      setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+      if (!res.ok) throw new Error('删除失败');
+      speak(language === 'zh' ? '已成功删除' : 'Successfully deleted');
+      setResult(null);
+      onChanged();
     } catch {
-      setActionError(language === 'zh' ? '删除失败，请重试' : 'Delete failed, please retry');
+      setActionError(language === 'zh' ? '删除失败，请重试' : 'Delete failed, please try again');
     } finally {
       setDeletingId(null);
     }
+  }
+
+  function handleDeleteEvent(event: CalendarEvent) {
+    if (event.recurrence || event.id.includes('::')) {
+      setRecurringDialog({ action: 'delete', event });
+      return;
+    }
+    void doDelete(event.id, 'all');
+  }
+
+  function handleModifyEvent(event: CalendarEvent) {
+    if (event.recurrence || event.id.includes('::')) {
+      setRecurringDialog({ action: 'modify', event });
+      return;
+    }
+    onModify(event);
   }
 
   async function handleBatchDelete() {
@@ -542,7 +563,7 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
                         <div className="flex-1 min-w-0">{eventRow(e)}</div>
                         {!multiSelectMode && (
                           <button
-                            onClick={() => handleDelete(e.id)}
+                            onClick={() => handleDeleteEvent(e)}
                             disabled={deletingId === e.id}
                             className="text-sm text-white bg-red-500 hover:bg-red-600 px-3 py-1 rounded-full transition disabled:opacity-50 flex-shrink-0"
                           >
@@ -978,6 +999,22 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
           </div>
         )}
       </div>
+      {recurringDialog && (
+        <RecurringActionDialog
+          action={recurringDialog.action}
+          onCancel={() => setRecurringDialog(null)}
+          onSelect={async (mode) => {
+            const { event } = recurringDialog;
+            setRecurringDialog(null);
+            if (recurringDialog.action === 'delete') {
+              await doDelete(event.id, mode);
+            } else {
+              // modify：把 mode 附加到 event 上传给父组件
+              onModify({ ...event, _recurringMode: mode } as unknown as CalendarEvent);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
