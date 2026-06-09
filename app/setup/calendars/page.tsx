@@ -112,6 +112,8 @@ export default function SetupCalendarsPage() {
           syncDirection,
         }),
       });
+      // 立即拉取一次 Google 日历事件，首次连接时不需要用户手动点同步
+      await fetch('/api/sync', { method: 'POST' });
       router.push('/');
     } catch {
       setError('保存失败，请重试');
@@ -228,7 +230,7 @@ export default function SetupCalendarsPage() {
           disabled={saving || selected.size === 0}
           className="w-full py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition disabled:opacity-50"
         >
-          {saving ? '保存中…' : `确认同步 ${selected.size} 个日历`}
+          {saving ? '正在同步日历事件…' : `确认同步 ${selected.size} 个日历`}
         </button>
 
         <button

@@ -14,7 +14,7 @@ interface Props {
   initialText?: string;
   onClose: () => void;
   onSaved: (event: CalendarEvent) => void;
-  onDeleted?: (id: string) => void;
+  onDeleted?: (event: CalendarEvent) => void;
 }
 
 type Tab = 'quick' | 'manual';
@@ -265,7 +265,7 @@ export function EventEditorPanel({
       const url = mode ? `/api/events/${event.id}?mode=future` : `/api/events/${event.id}`;
       const res = await fetch(url, { method: 'DELETE' });
       if (!res.ok) throw new Error('删除失败');
-      onDeleted?.(event.id);
+      onDeleted?.(event);
     } catch {
       setError(t('deleteFailed'));
       setDeleting(false);
