@@ -57,10 +57,11 @@ export async function getEvents(userId: string, startDate?: Date, endDate?: Date
 export async function createEvent(
   userId: string,
   data: Pick<CalendarEvent, 'title' | 'startAt'> &
-    Partial<Pick<CalendarEvent, 'endAt' | 'reminderAt' | 'allDay' | 'recurrence' | 'sourceText' | 'color'>>
+    Partial<Pick<CalendarEvent, 'id' | 'endAt' | 'reminderAt' | 'allDay' | 'recurrence' | 'sourceText' | 'color'>>
 ): Promise<CalendarEvent> {
   const event = await prisma.event.create({
     data: {
+      ...(data.id ? { id: data.id } : {}),
       userId,
       title: data.title,
       startAt: new Date(data.startAt),
