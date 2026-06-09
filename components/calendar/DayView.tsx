@@ -89,10 +89,10 @@ export function DayView({ date, events, focusTime, onSlotClick, onEventClick }: 
   }, [date, focusTime?.getTime(), timezone]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden bg-white/70">
       {/* All-day strip */}
       {allDayEvents.length > 0 && (
-        <div className="flex-shrink-0 flex border-b border-gray-200 bg-gray-50">
+        <div className="flex-shrink-0 flex border-b border-gray-200 bg-white/80 backdrop-blur-sm">
           <div className="w-20 flex-shrink-0 text-xs text-gray-400 flex items-center justify-end pr-2 py-1">
             {t('allDay2')}
           </div>
