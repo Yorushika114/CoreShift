@@ -49,7 +49,8 @@ export default function SetupCalendarsPage() {
   const [lang, setLang] = useState<'zh' | 'en'>('zh');
 
   useEffect(() => {
-    setLang(getLang());
+    const currentLang = getLang();
+    setLang(currentLang);
     fetch('/api/google/calendars')
       .then((r) => r.json())
       .then((data: GoogleCalendar[]) => {
@@ -59,7 +60,7 @@ export default function SetupCalendarsPage() {
         const primary = data.find((c) => c.primary);
         if (primary) setDefaultWrite(primary.id);
       })
-      .catch(() => setError(lang === 'zh' ? '无法获取日历列表，请检查网络或重新授权' : 'Failed to load calendars. Check network or re-authorize.'))
+      .catch(() => setError(currentLang === 'zh' ? '无法获取日历列表，请检查网络或重新授权' : 'Failed to load calendars. Check network or re-authorize.'))
       .finally(() => setLoading(false));
 
     fetch('/api/google/calendars/select/current')
