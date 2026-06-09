@@ -5,7 +5,6 @@ import { useMemo } from 'react';
 import {
   getCalendarDays,
   isToday,
-  formatMonthYear,
   toISODateString,
 } from '@/lib/calendar/date-utils';
 import { EventCard } from '@/components/events/EventCard';
@@ -40,12 +39,6 @@ export function MonthGrid({ viewDate, events, onDateClick }: MonthGridProps) {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex items-center px-6 py-3 border-b border-indigo-100/50 flex-shrink-0 bg-white/70 backdrop-blur-sm">
-        <h1 className="text-2xl font-light text-neutral-700 tracking-tight">
-          {formatMonthYear(viewDate)}
-        </h1>
-      </div>
-
       <div className="grid grid-cols-7 border-b border-indigo-100/50 flex-shrink-0 bg-white/70 backdrop-blur-sm">
         {weekHeaders.map((h, i) => {
           const isWeekend = i === 0 || i === 6;
@@ -80,7 +73,7 @@ export function MonthGrid({ viewDate, events, onDateClick }: MonthGridProps) {
                 'border-b border-r border-gray-200 p-1.5 cursor-pointer transition-colors',
                 today ? 'bg-indigo-50/70 hover:bg-indigo-50' :
                 !inMonth ? 'bg-white/30 hover:bg-white/50' :
-                isWeekend ? 'bg-violet-50/30 hover:bg-violet-50/60' :
+                isWeekend ? 'bg-violet-50/70 hover:bg-violet-100/80' :
                 'bg-white/60 hover:bg-white/90',
               ].join(' ')}
             >
