@@ -50,6 +50,12 @@ export function BudgetPanel({ onEdit }: { onEdit: () => void }) {
   useEffect(() => { loadProgress(); }, [loadProgress]);
 
   useEffect(() => {
+    const es = new EventSource('/api/events/stream');
+    es.onmessage = () => loadProgress();
+    return () => es.close();
+  }, [loadProgress]);
+
+  useEffect(() => {
     const onVisible = () => { if (document.visibilityState === 'visible') loadProgress(); };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', loadProgress);
