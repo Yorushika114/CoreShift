@@ -309,10 +309,6 @@ function CalendarPageInner() {
 
   const prevLabel = view === 'year' ? t('prevYear') : view === 'month' ? t('prevMonth') : view === 'week' ? t('prevWeek') : t('prevDay');
   const nextLabel = view === 'year' ? t('nextYear') : view === 'month' ? t('nextMonth') : view === 'week' ? t('nextWeek') : t('nextDay');
-  const demoCommands = language === 'en'
-    ? ['Meeting tomorrow at 3pm', "What's on tomorrow", 'Move tomorrow meeting to 4pm']
-    : ['明天下午三点提醒我开组会', '明天有什么安排', '把明天下午三点的组会改到四点'];
-
   function openVoiceWithDraft(command?: string) {
     setVoiceDraft(command);
     setVoiceOpen(true);
@@ -367,23 +363,6 @@ function CalendarPageInner() {
             <span className="text-base">🎙</span>
             {t('voiceInput')}
           </button>
-
-          <div className="rounded-lg border border-indigo-100 bg-indigo-50/70 p-3">
-            <p className="mb-2 text-xs font-medium text-indigo-500">
-              {language === 'en' ? 'Quick demo' : '快速演示'}
-            </p>
-            <div className="flex flex-col gap-1.5">
-              {demoCommands.map(command => (
-                <button
-                  key={command}
-                  onClick={() => openVoiceWithDraft(command)}
-                  className="w-full rounded-md bg-white/80 px-2.5 py-1.5 text-left text-xs leading-relaxed text-gray-600 hover:bg-white hover:text-indigo-600 transition"
-                >
-                  {command}
-                </button>
-              ))}
-            </div>
-          </div>
 
           <SettingsPanel
             googleConnected={googleConnected}
