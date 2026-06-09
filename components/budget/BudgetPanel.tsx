@@ -38,9 +38,13 @@ export function BudgetPanel({ onEdit }: { onEdit: () => void }) {
   const [progresses, setProgresses] = useState<BudgetProgress[]>([]);
 
   const loadProgress = useCallback(async () => {
-    const { start, end } = getWeekRange();
-    const res = await fetch(`/api/budgets/progress?start=${start}&end=${end}`);
-    if (res.ok) setProgresses(await res.json());
+    try {
+      const { start, end } = getWeekRange();
+      const res = await fetch(`/api/budgets/progress?start=${start}&end=${end}`);
+      if (res.ok) setProgresses(await res.json());
+    } catch {
+      // 网络不可用时静默失败，保留上次数据
+    }
   }, []);
 
   useEffect(() => { loadProgress(); }, [loadProgress]);
