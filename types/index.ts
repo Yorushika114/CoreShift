@@ -51,4 +51,7 @@ export type ParsedCommand = {
   ambiguities: string[];
   clarificationNeeded: boolean;
   clarificationQuestion?: string;
+  recurrence?: 'daily' | 'weekly' | 'monthly' | null;
+  recurrenceEndAt?: string | null;
+  recurrenceCount?: number | null;
 };
