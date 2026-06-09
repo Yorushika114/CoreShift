@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     const direction = (session?.syncDirection ?? 'both') as 'pull' | 'push' | 'both';
 
     const result = await syncFromGoogle(auth.visitorId, auth.userId, direction);
-    if (result.pulled > 0 || result.pushed > 0) {
+    if (result.pulled > 0 || result.pushed > 0 || result.deleted > 0) {
       eventBus.broadcast('synced');
     }
     return NextResponse.json(result);
