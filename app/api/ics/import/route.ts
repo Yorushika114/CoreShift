@@ -28,13 +28,19 @@ export async function POST(request: NextRequest) {
 
   let imported = 0;
   let skipped = 0;
+  let earliestDate: Date | null = null;
 
   for (const ev of events) {
     try {
-      const existing = await prisma.event.findFirst({ where: { icsUid: ev.uid } });
-      if (existing) {
-        skipped++;
-        continue;
+      // 去重：先按 icsUid 查
+      const byIcsUid = await prisma.event.findFirst({ where: { icsUid: ev.uid } });
+      if (byIcsUid) { skipped++; continue; }
+
+      // 去重：CoreShift 自己导出的事件 UID 格式为 "{id}@coreshift"，通过原始 ID 查找避免重复导入
+      const coreShiftMatch = ev.uid.match(/^(.+)@coreshift$/);
+      if (coreShiftMatch) {
+        const original = await prisma.event.findFirst({ where: { id: coreShiftMatch[1] } });
+        if (original) { skipped++; continue; }
       }
 
       await prisma.event.create({
@@ -50,6 +56,7 @@ export async function POST(request: NextRequest) {
         },
       });
       imported++;
+      if (!earliestDate || ev.startAt < earliestDate) earliestDate = ev.startAt;
     } catch (e) {
       console.error(`ICS import: skipping event "${ev.title}" (${ev.uid}):`, e);
       skipped++;
@@ -60,5 +67,5 @@ export async function POST(request: NextRequest) {
     eventBus.broadcast('synced');
   }
 
-  return NextResponse.json({ imported, skipped });
+  return NextResponse.json({ imported, skipped, earliestDate: earliestDate?.toISOString() ?? null });
 }
