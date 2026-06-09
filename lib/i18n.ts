@@ -164,6 +164,7 @@ export const labels = {
     inlineCreateFailed: '创建失败，请重试',
     emptyStateHint: '说一句话来记事，比如',
     emptyStateExample: '明天下午三点开组会',
+    undoBtn: '撤销',
   },
   en: {
     settings: 'Settings',
@@ -318,6 +319,7 @@ export const labels = {
     inlineCreateFailed: 'Failed to create, please retry',
     emptyStateHint: 'Try saying something like',
     emptyStateExample: 'Team meeting tomorrow at 3pm',
+    undoBtn: 'Undo',
   },
 } as const;
 

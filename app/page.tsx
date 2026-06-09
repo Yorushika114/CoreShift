@@ -120,7 +120,7 @@ function CalendarPageInner() {
 
   function showUndoToast(msg: string) {
     setUndoToast(msg);
-    setTimeout(() => setUndoToast(null), 3000);
+    setTimeout(() => setUndoToast(null), 5000);
   }
 
   const handleUndoRef = useRef<() => Promise<void>>(async () => {});
@@ -358,8 +358,10 @@ function CalendarPageInner() {
   function handleEditorSaved(saved: CalendarEvent) {
     if (editor.event) {
       pushUndo({ type: 'edit', before: editor.event, after: saved });
+      showUndoToast(language === 'zh' ? `已修改「${saved.title}」` : `Updated "${saved.title}"`);
     } else {
       pushUndo({ type: 'create', event: saved });
+      showUndoToast(language === 'zh' ? `已创建「${saved.title}」` : `Created "${saved.title}"`);
     }
     const eventDate = new Date(saved.startAt);
     setEditor({ open: false });
@@ -374,6 +376,7 @@ function CalendarPageInner() {
 
   function handleEditorDeleted(deletedEvent: CalendarEvent) {
     pushUndo({ type: 'delete', event: deletedEvent });
+    showUndoToast(language === 'zh' ? `已删除「${deletedEvent.title}」` : `Deleted "${deletedEvent.title}"`);
     setEditor({ open: false });
     fetchEvents(viewDate, view);
   }
@@ -637,9 +640,15 @@ function CalendarPageInner() {
 
       {/* Undo toast */}
       {undoToast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[110] flex items-center gap-3 bg-gray-800 text-white text-sm px-4 py-2.5 rounded-full shadow-lg animate-fade-in">
-          <span>↩</span>
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[110] flex items-center gap-3 bg-gray-800 text-white text-sm px-4 py-2.5 rounded-full shadow-lg animate-fade-in">
+          <span>✓</span>
           <span>{undoToast}</span>
+          <button
+            onClick={() => handleUndoRef.current()}
+            className="ml-1 text-indigo-300 hover:text-white font-medium transition underline underline-offset-2"
+          >
+            {t('undoBtn')}
+          </button>
         </div>
       )}
 
