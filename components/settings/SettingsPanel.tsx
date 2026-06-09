@@ -27,9 +27,10 @@ interface SettingsPanelProps {
   syncMsg: string | null;
   onSync: () => void;
   onDisconnect: (deleteEvents: boolean) => void;
+  onNavigate?: (date: Date) => void;
 }
 
-export function SettingsPanel({ googleConnected, syncing, syncMsg, onSync, onDisconnect }: SettingsPanelProps) {
+export function SettingsPanel({ googleConnected, syncing, syncMsg, onSync, onDisconnect, onNavigate }: SettingsPanelProps) {
   const { use24h, language, timezone, bgType, bgValue, setUse24h, setLanguage, setTimezone, setBg, t } = useSettings();
   const TIMEZONES = Object.entries(TZ_LABELS).map(([value, labels]) => ({
     value,
@@ -311,11 +312,22 @@ export function SettingsPanel({ googleConnected, syncing, syncMsg, onSync, onDis
                   });
                   const data = await res.json();
                   if (res.ok) {
-                    setIcsMsg(
-                      language === 'zh'
-                        ? `已导入 ${data.imported} 个，跳过 ${data.skipped} 个重复`
-                        : `Imported ${data.imported}, skipped ${data.skipped} duplicates`
-                    );
+                    if (data.imported > 0 && data.earliestDate) {
+                      const earliest = new Date(data.earliestDate);
+                      const dateStr = earliest.toLocaleDateString(language === 'zh' ? 'zh-CN' : 'en-US', { month: 'long', day: 'numeric' });
+                      setIcsMsg(
+                        language === 'zh'
+                          ? `已导入 ${data.imported} 个，跳过 ${data.skipped} 个重复（最早事件：${dateStr}）`
+                          : `Imported ${data.imported}, skipped ${data.skipped} duplicates (earliest: ${dateStr})`
+                      );
+                      onNavigate?.(earliest);
+                    } else {
+                      setIcsMsg(
+                        language === 'zh'
+                          ? `已导入 ${data.imported} 个，跳过 ${data.skipped} 个重复`
+                          : `Imported ${data.imported}, skipped ${data.skipped} duplicates`
+                      );
+                    }
                   } else {
                     setIcsMsg(data.error ?? (language === 'zh' ? '导入失败' : 'Import failed'));
                   }
