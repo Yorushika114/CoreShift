@@ -30,7 +30,7 @@ function formatRecurrenceSummary(
   const freqLabel = isZh
     ? { daily: '每天', weekly: '每周', monthly: '每月' }[recurrence]
     : { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' }[recurrence];
-  if (count) return isZh ? `${freqLabel}，共 ${count} 次` : `${freqLabel}, ${count} times`;
+  if (count != null && count > 0) return isZh ? `${freqLabel}，共 ${count} 次` : `${freqLabel}, ${count} times`;
   if (endAt) {
     const d = new Date(endAt);
     return isZh
@@ -114,9 +114,10 @@ export function EventEditorPanel({
     event?.endAt ? toInputTime(event.endAt) : toInputTime(defaultEndDate),
   );
   const [allDay, setAllDay] = useState(event?.allDay ?? false);
-  const [recurrence, setRecurrence] = useState<'' | 'daily' | 'weekly'>(
+  const [recurrence, setRecurrence] = useState<'' | 'daily' | 'weekly' | 'monthly'>(
     event?.recurrence === 'daily' ? 'daily'
     : event?.recurrence === 'weekly' ? 'weekly'
+    : event?.recurrence === 'monthly' ? 'monthly'
     : '',
   );
   const [reminderOffset, setReminderOffset] = useState<string>(() => {
@@ -226,6 +227,8 @@ export function EventEditorPanel({
           reminderAt: computedReminderAt,
           allDay,
           recurrence: recurrence || null,
+          recurrenceEndAt: null,
+          recurrenceCount: null,
           color,
         };
       }
@@ -531,12 +534,13 @@ export function EventEditorPanel({
               <label className="block text-xs text-gray-500 mb-1">{t('repeat')}</label>
               <select
                 value={recurrence}
-                onChange={e => setRecurrence(e.target.value as '' | 'daily' | 'weekly')}
+                onChange={e => setRecurrence(e.target.value as '' | 'daily' | 'weekly' | 'monthly')}
                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400 transition bg-white"
               >
                 <option value="">{t('noRepeat')}</option>
                 <option value="daily">{t('dailyRepeat')}</option>
                 <option value="weekly">{t('weeklyRepeat')}</option>
+                <option value="monthly">{language === 'zh' ? '每月' : 'Monthly'}</option>
               </select>
             </div>
           </div>
