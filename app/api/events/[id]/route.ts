@@ -166,8 +166,8 @@ export async function DELETE(
             where: { userId: auth.userId, icsSeriesUid: row.icsSeriesUid, startAt: { gte: row.startAt } },
           });
           eventBus.broadcast('deleted');
-          const session2 = await getStoredSession(auth.visitorId);
-          const shouldSync = (session2?.syncDirection ?? 'both') !== 'pull';
+          const session = await getStoredSession(auth.visitorId);
+          const shouldSync = (session?.syncDirection ?? 'both') !== 'pull';
           for (const r of futureRows) {
             if (r.googleEventId && shouldSync) {
               const pending = await prisma.pendingGoogleDelete.create({

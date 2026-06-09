@@ -80,4 +80,6 @@ model PendingGoogleDelete {
   visitorId        String
   userId           String
   createdAt        DateTime @default(now())
+
+  @@unique([googleEventId, userId])
 }
