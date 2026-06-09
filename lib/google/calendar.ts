@@ -72,9 +72,9 @@ export async function syncFromGoogle(
   visitorId?: string,
   userId?: string,
   direction: 'pull' | 'push' | 'both' = 'both'
-): Promise<{ pulled: number; pushed: number }> {
+): Promise<{ pulled: number; pushed: number; deleted: number }> {
   const auth = await getAuthenticatedClient(visitorId);
-  if (!auth || !userId) return { pulled: 0, pushed: 0 };
+  if (!auth || !userId) return { pulled: 0, pushed: 0, deleted: 0 };
 
   const calendarIds = await getSelectedCalendarIds(visitorId);
   const calendar = google.calendar({ version: 'v3', auth });
@@ -155,6 +155,36 @@ export async function syncFromGoogle(
     }
   }
 
+  let deleted = 0;
+
+  if (direction === 'push' || direction === 'both') {
+    // 清理 7 天前过期记录
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    await prisma.pendingGoogleDelete.deleteMany({
+      where: { userId, createdAt: { lt: sevenDaysAgo } },
+    });
+
+    // 处理待删除队列
+    const pendingDeletes = await prisma.pendingGoogleDelete.findMany({ where: { userId } });
+    for (const record of pendingDeletes) {
+      try {
+        await deleteEventFromGoogle(record.googleEventId, record.googleCalendarId, record.visitorId);
+        await prisma.pendingGoogleDelete.delete({ where: { id: record.id } });
+        deleted++;
+      } catch (e: unknown) {
+        const status =
+          (e as { status?: number })?.status ??
+          (e as { response?: { status?: number } })?.response?.status;
+        if (status === 404 || status === 410) {
+          await prisma.pendingGoogleDelete.delete({ where: { id: record.id } });
+          deleted++;
+        }
+        // 其他错误：留队列，下次重试
+      }
+    }
+  }
+
   // 推送阶段：仅 push 或 both 时执行
   const localOnly = (direction === 'push' || direction === 'both')
     ? await prisma.event.findMany({ where: { userId, googleEventId: null } })
@@ -191,5 +221,5 @@ export async function syncFromGoogle(
     }
   }
 
-  return { pulled, pushed };
+  return { pulled, pushed, deleted };
 }
