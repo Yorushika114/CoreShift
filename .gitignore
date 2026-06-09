@@ -45,6 +45,15 @@ dev.db-journal
 # tooling / IDE
 /.superpowers
 
+# Next.js build backups
+.next.bak*/
+
+# Playwright MCP logs/snapshots
+.playwright-mcp/
+
+# local dev logs
+*.log
+
 # Word temporary lock files
 ~$*.docx
 ~$*.doc
