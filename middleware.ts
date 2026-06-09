@@ -18,7 +18,16 @@ export function middleware(request: NextRequest) {
     if (pathname.startsWith('/api/')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    return NextResponse.redirect(new URL('/api/auth/google', request.url));
+    // 页面请求：自动分配 visitor_id，允许不登录 Google 直接使用
+    const newId = crypto.randomUUID();
+    const response = NextResponse.next();
+    response.cookies.set('visitor_id', newId, {
+      httpOnly: true,
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 365,
+      path: '/',
+    });
+    return response;
   }
 
   return NextResponse.next();
