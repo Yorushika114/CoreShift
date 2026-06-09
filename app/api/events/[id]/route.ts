@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { updateEvent, deleteEvent } from '@/lib/calendar/events';
 import { eventBus } from '@/lib/sse/eventBus';
 import { updateEventInGoogle, deleteEventFromGoogle } from '@/lib/google/calendar';
+import { getStoredSession } from '@/lib/google/auth';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, unauthorized } from '@/lib/auth';
 
@@ -165,9 +166,21 @@ export async function DELETE(
             where: { userId: auth.userId, icsSeriesUid: row.icsSeriesUid, startAt: { gte: row.startAt } },
           });
           eventBus.broadcast('deleted');
+          const session2 = await getStoredSession(auth.visitorId);
+          const shouldSync = (session2?.syncDirection ?? 'both') !== 'pull';
           for (const r of futureRows) {
-            if (r.googleEventId) {
-              deleteEventFromGoogle(r.googleEventId, r.googleCalendarId, auth.visitorId).catch((e) => console.error('Google delete failed:', e));
+            if (r.googleEventId && shouldSync) {
+              const pending = await prisma.pendingGoogleDelete.create({
+                data: {
+                  googleEventId: r.googleEventId,
+                  googleCalendarId: r.googleCalendarId ?? null,
+                  visitorId: auth.visitorId,
+                  userId: auth.userId,
+                },
+              });
+              deleteEventFromGoogle(r.googleEventId, r.googleCalendarId, auth.visitorId)
+                .then(() => prisma.pendingGoogleDelete.delete({ where: { id: pending.id } }))
+                .catch((e) => console.error('Google delete queued for retry:', e));
             }
           }
           return new NextResponse(null, { status: 204 });
@@ -183,7 +196,20 @@ export async function DELETE(
     await deleteEvent(auth.userId, realId);
     eventBus.broadcast('deleted');
     if (row?.googleEventId) {
-      deleteEventFromGoogle(row.googleEventId, row.googleCalendarId, auth.visitorId).catch((e) => console.error('Google delete failed:', e));
+      const session = await getStoredSession(auth.visitorId);
+      if ((session?.syncDirection ?? 'both') !== 'pull') {
+        const pending = await prisma.pendingGoogleDelete.create({
+          data: {
+            googleEventId: row.googleEventId,
+            googleCalendarId: row.googleCalendarId ?? null,
+            visitorId: auth.visitorId,
+            userId: auth.userId,
+          },
+        });
+        deleteEventFromGoogle(row.googleEventId, row.googleCalendarId, auth.visitorId)
+          .then(() => prisma.pendingGoogleDelete.delete({ where: { id: pending.id } }))
+          .catch((e) => console.error('Google delete queued for retry:', e));
+      }
     }
 
     return new NextResponse(null, { status: 204 });
