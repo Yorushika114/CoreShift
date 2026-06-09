@@ -70,7 +70,11 @@ export function BudgetEditModal({ onClose }: { onClose: () => void }) {
       ? await fetch(`/api/budgets/${editingId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       : await fetch('/api/budgets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     setSaving(false);
-    if (res.ok) { cancelForm(); await load(); }
+    if (res.ok) {
+      cancelForm();
+      await load();
+      window.dispatchEvent(new Event('budget-updated'));
+    }
   }
 
   async function handleDelete(id: string) {
@@ -79,6 +83,7 @@ export function BudgetEditModal({ onClose }: { onClose: () => void }) {
     setDeletingId(null);
     cancelForm();
     await load();
+    window.dispatchEvent(new Event('budget-updated'));
   }
 
   const showForm = adding || editingId !== null;
