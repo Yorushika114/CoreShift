@@ -36,6 +36,7 @@ const DOT_COLORS: Record<string, string> = {
 export function BudgetPanel({ onEdit }: { onEdit: () => void }) {
   const { t, language } = useSettings();
   const [progresses, setProgresses] = useState<BudgetProgress[]>([]);
+  const [collapsed, setCollapsed] = useState(true);
 
   const loadProgress = useCallback(async () => {
     const { start, end } = getWeekRange();
@@ -61,12 +62,21 @@ export function BudgetPanel({ onEdit }: { onEdit: () => void }) {
     <>
       <div className="border border-gray-200 rounded-lg overflow-hidden text-sm">
         {/* Header */}
-        <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-100">
-          <span className="flex items-center gap-1.5 text-gray-700 font-medium text-xs">
+        <div
+          className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-100 cursor-pointer select-none hover:bg-gray-100 transition"
+          onClick={() => setCollapsed(v => !v)}
+        >
+          <span className="flex items-center gap-1.5 text-gray-700 font-medium text-xs flex-1">
             <span>🎯</span>
             {t('budgetTitle')}
           </span>
-          <div className="flex items-center gap-1">
+          <span
+            className="text-gray-400 text-xs transition-transform duration-200 flex-shrink-0"
+            style={{ display: 'inline-block', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}
+          >
+            ▾
+          </span>
+          <div className="flex items-center gap-1 ml-1" onClick={e => e.stopPropagation()}>
             <button
               onClick={loadProgress}
               className="text-gray-400 hover:text-gray-600 transition px-1 text-xs"
@@ -85,48 +95,52 @@ export function BudgetPanel({ onEdit }: { onEdit: () => void }) {
         </div>
 
         {/* Progress list */}
-        {progresses.length === 0 ? (
-          <div className="px-3 py-3 text-center">
-            <p className="text-xs text-gray-400">{t('budgetEmpty')}</p>
-            <button
-              onClick={onEdit}
-              className="mt-1.5 text-xs text-blue-500 hover:text-blue-600 transition"
-            >
-              + {t('budgetAdd')}
-            </button>
-          </div>
-        ) : (
-          <div className="divide-y divide-gray-100">
-            {progresses.map(p => {
-              const pct = Math.min(p.percentage, 100);
-              const done = p.percentage >= 100;
-              const th = Math.floor(p.targetMinutes / 60);
-              const tm = p.targetMinutes % 60;
-              const bar = BAR_COLORS[p.color] ?? 'bg-emerald-500';
-              const dot = DOT_COLORS[p.color] ?? 'bg-emerald-500';
-              return (
-                <div key={p.id} className="px-3 py-2">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot}`} />
-                    <span className="text-xs font-medium text-gray-700 truncate flex-1">{p.label}</span>
-                    {done && <span className="text-xs text-emerald-600">✓</span>}
-                    <span className="text-xs text-gray-400">{p.percentage}%</span>
-                  </div>
-                  <div className="h-1 bg-gray-100 rounded-full mb-1">
-                    <div className={`h-1 rounded-full transition-all duration-500 ${bar}`} style={{ width: `${pct}%` }} />
-                  </div>
-                  <div className="flex justify-between text-xs text-gray-400">
-                    <span>{formatDuration(p.actualMinutes, language)}</span>
-                    <span>
-                      {language === 'en'
-                        ? `/ ${th}h${tm > 0 ? ' ' + tm + 'm' : ''}`
-                        : `/ ${th > 0 ? th + t('budgetHours') : ''}${tm > 0 ? tm + t('budgetMins') : ''}`}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+        {!collapsed && (
+          <>
+            {progresses.length === 0 ? (
+              <div className="px-3 py-3 text-center">
+                <p className="text-xs text-gray-400">{t('budgetEmpty')}</p>
+                <button
+                  onClick={onEdit}
+                  className="mt-1.5 text-xs text-blue-500 hover:text-blue-600 transition"
+                >
+                  + {t('budgetAdd')}
+                </button>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {progresses.map(p => {
+                  const pct = Math.min(p.percentage, 100);
+                  const done = p.percentage >= 100;
+                  const th = Math.floor(p.targetMinutes / 60);
+                  const tm = p.targetMinutes % 60;
+                  const bar = BAR_COLORS[p.color] ?? 'bg-emerald-500';
+                  const dot = DOT_COLORS[p.color] ?? 'bg-emerald-500';
+                  return (
+                    <div key={p.id} className="px-3 py-2">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot}`} />
+                        <span className="text-xs font-medium text-gray-700 truncate flex-1">{p.label}</span>
+                        {done && <span className="text-xs text-emerald-600">✓</span>}
+                        <span className="text-xs text-gray-400">{p.percentage}%</span>
+                      </div>
+                      <div className="h-1 bg-gray-100 rounded-full mb-1">
+                        <div className={`h-1 rounded-full transition-all duration-500 ${bar}`} style={{ width: `${pct}%` }} />
+                      </div>
+                      <div className="flex justify-between text-xs text-gray-400">
+                        <span>{formatDuration(p.actualMinutes, language)}</span>
+                        <span>
+                          {language === 'en'
+                            ? `/ ${th}h${tm > 0 ? ' ' + tm + 'm' : ''}`
+                            : `/ ${th > 0 ? th + t('budgetHours') : ''}${tm > 0 ? tm + t('budgetMins') : ''}`}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
       </div>
 
