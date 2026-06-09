@@ -179,7 +179,17 @@ export function WeekView({
       </div>
 
       {/* Grid content */}
-      <div className="flex" style={{ height: `${48 * SLOT_HEIGHT}px` }}>
+      <div className="flex relative" style={{ height: `${48 * SLOT_HEIGHT}px` }}>
+        {/* Empty state overlay */}
+        {events.filter(e => !e.allDay).length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+            <div className="text-center px-8 py-6 rounded-2xl bg-white/70 backdrop-blur-sm border border-indigo-100/50 shadow-sm">
+              <div className="text-3xl mb-2">🎙</div>
+              <p className="text-sm text-gray-500 mb-1">{t('emptyStateHint')}</p>
+              <p className="text-sm text-indigo-500 font-medium">「{t('emptyStateExample')}」</p>
+            </div>
+          </div>
+        )}
         {/* Time labels */}
         <div className="w-20 flex-shrink-0 relative">
           {Array.from({ length: 24 }, (_, hour) => (

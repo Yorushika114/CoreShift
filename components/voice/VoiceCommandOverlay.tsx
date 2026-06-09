@@ -86,6 +86,11 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
     event: CalendarEvent;
   } | null>(null);
   const [batchDeleting, setBatchDeleting] = useState(false);
+  const [inlineTitle, setInlineTitle] = useState('');
+  const [inlineDate, setInlineDate] = useState('');
+  const [inlineTime, setInlineTime] = useState('');
+  const [inlineSaving, setInlineSaving] = useState(false);
+  const [inlineSaved, setInlineSaved] = useState(false);
   const { supported, listening, interimText, error, start, stop } = useSpeechRecognition({
     lang,
     onResult: (text) => { if (text) void handleCommand(text); },
@@ -117,6 +122,26 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
     if (error === 'not-allowed' || error === 'unsupported') setTextMode(true);
   }, [error]);
 
+  useEffect(() => {
+    if (result?.kind !== 'create-preview') return;
+    const { parsed } = result;
+    setInlineTitle(parsed.title ?? '');
+    setInlineSaved(false);
+    if (parsed.startAt) {
+      const d = new Date(parsed.startAt);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const hh = String(d.getHours()).padStart(2, '0');
+      const min = String(d.getMinutes()).padStart(2, '0');
+      setInlineDate(`${yyyy}-${mm}-${dd}`);
+      setInlineTime(`${hh}:${min}`);
+    } else {
+      setInlineDate('');
+      setInlineTime('');
+    }
+  }, [result]);
+
   async function handleCommand(text: string) {
     setActionError(null);
     setResult(null);
@@ -134,11 +159,7 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
       const parsed = await parseVoiceCommandWithLLM(text, lang, new Date(), timezone);
 
       if (parsed.intent === 'create' || parsed.intent === 'unknown') {
-        if (parsed.ambiguities.length > 0) {
-          setResult({ kind: 'create-preview', parsed, original: text });
-        } else {
-          onCreate(text);
-        }
+        setResult({ kind: 'create-preview', parsed, original: text });
         return;
       }
 
@@ -391,6 +412,34 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
     }
     if (errorCount > 0) {
       setActionError(language === 'zh' ? `${errorCount} 个删除失败，请重试` : `${errorCount} deletions failed, please retry`);
+    }
+  }
+
+  async function handleInlineSave() {
+    if (inlineSaving || !inlineTitle.trim()) return;
+    setInlineSaving(true);
+    setActionError(null);
+    try {
+      const startAt = inlineDate && inlineTime
+        ? new Date(`${inlineDate}T${inlineTime}:00`).toISOString()
+        : new Date().toISOString();
+      const endAt = inlineDate && inlineTime
+        ? new Date(new Date(`${inlineDate}T${inlineTime}:00`).getTime() + 60 * 60 * 1000).toISOString()
+        : undefined;
+      const res = await fetch('/api/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: inlineTitle.trim(), startAt, endAt }),
+      });
+      if (!res.ok) throw new Error('save failed');
+      setInlineSaved(true);
+      onChanged();
+      speak(lang === 'en-US' ? 'Event created' : '已创建');
+      setTimeout(() => { setResult(null); setInlineSaved(false); }, 1200);
+    } catch {
+      setActionError(t('inlineCreateFailed'));
+    } finally {
+      setInlineSaving(false);
     }
   }
 
@@ -691,6 +740,65 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
               </>
             )}
 
+            {result.kind === 'create-preview' && (
+              <>
+                <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-3">
+                  {t('inlineCreateTitle')}
+                </p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">{t('inlineCreateTitleLabel')}</label>
+                    <input
+                      type="text"
+                      value={inlineTitle}
+                      onChange={e => setInlineTitle(e.target.value)}
+                      placeholder={result.parsed.title ?? result.original}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <label className="text-xs text-gray-500 mb-1 block">{t('inlineCreateTimeLabel')}</label>
+                      <input
+                        type="date"
+                        value={inlineDate}
+                        onChange={e => setInlineDate(e.target.value)}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-xs text-gray-500 mb-1 block">&nbsp;</label>
+                      <input
+                        type="time"
+                        value={inlineTime}
+                        onChange={e => setInlineTime(e.target.value)}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                      />
+                    </div>
+                  </div>
+                  {actionError && (
+                    <p className="text-xs text-red-500">{actionError}</p>
+                  )}
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={handleInlineSave}
+                      disabled={inlineSaving || !inlineTitle.trim() || inlineSaved}
+                      className="flex-1 bg-indigo-500 hover:bg-indigo-600 text-white text-sm rounded-lg py-2 transition disabled:opacity-50"
+                    >
+                      {inlineSaved ? t('inlineCreateSuccess') : inlineSaving ? t('inlineCreateSaving') : t('inlineCreateSave')}
+                    </button>
+                    <button
+                      onClick={() => { onCreate(result.original); }}
+                      className="flex-1 border border-gray-200 text-gray-600 text-sm rounded-lg py-2 hover:bg-gray-50 transition"
+                    >
+                      {t('inlineCreateEdit')}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+
             {result.kind === 'budget-progress' && (
               <>
                 <div className="flex items-center justify-between mb-1">
@@ -836,52 +944,7 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
               </>
             )}
 
-            {result.kind === 'create-preview' && (
-              <>
-                <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">{t('recognitionResult')}</p>
-                <div className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3 space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500 w-10 flex-shrink-0">{t('titleLabel')}</span>
-                    <span className="text-sm text-gray-800 font-medium">
-                      {result.parsed.title ?? (
-                        <span className="text-amber-500 italic">
-                          {lang === 'zh-CN' ? '（未识别）' : '(not recognized)'}
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                  {result.parsed.startAt && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500 w-10 flex-shrink-0">{t('timeLabel')}</span>
-                      <span className="text-sm text-gray-800">
-                        {formatDateCN(new Date(result.parsed.startAt))} {formatTimeCN(new Date(result.parsed.startAt))}
-                      </span>
-                    </div>
-                  )}
-                  {result.parsed.ambiguities.map((msg, i) => (
-                    <p key={i} className="text-xs text-amber-600 flex items-center gap-1">
-                      <span>⚠</span>{msg}
-                    </p>
-                  ))}
-                </div>
-                <div className="flex justify-end gap-2 pt-1">
-                  <button
-                    onClick={() => setResult(null)}
-                    className="px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100 rounded-full transition"
-                  >
-                    {t('reenter')}
-                  </button>
-                  <button
-                    onClick={() => onCreate(result.original)}
-                    className="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-full hover:bg-blue-600 transition"
-                  >
-                    {t('fillDetails')}
-                  </button>
-                </div>
-              </>
-            )}
-
-            {actionError && <p className="text-xs text-red-500">{actionError}</p>}
+            {actionError && result.kind !== 'create-preview' && <p className="text-xs text-red-500">{actionError}</p>}
 
             {result.kind !== 'create-preview' && (
               <div className="flex justify-end pt-1">

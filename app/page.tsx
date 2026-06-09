@@ -120,7 +120,7 @@ function CalendarPageInner() {
 
   function showUndoToast(msg: string) {
     setUndoToast(msg);
-    setTimeout(() => setUndoToast(null), 3000);
+    setTimeout(() => setUndoToast(null), 5000);
   }
 
   const handleUndoRef = useRef<() => Promise<void>>(async () => {});
@@ -358,8 +358,10 @@ function CalendarPageInner() {
   function handleEditorSaved(saved: CalendarEvent) {
     if (editor.event) {
       pushUndo({ type: 'edit', before: editor.event, after: saved });
+      showUndoToast(language === 'zh' ? `已修改「${saved.title}」` : `Updated "${saved.title}"`);
     } else {
       pushUndo({ type: 'create', event: saved });
+      showUndoToast(language === 'zh' ? `已创建「${saved.title}」` : `Created "${saved.title}"`);
     }
     const eventDate = new Date(saved.startAt);
     setEditor({ open: false });
@@ -374,6 +376,7 @@ function CalendarPageInner() {
 
   function handleEditorDeleted(deletedEvent: CalendarEvent) {
     pushUndo({ type: 'delete', event: deletedEvent });
+    showUndoToast(language === 'zh' ? `已删除「${deletedEvent.title}」` : `Deleted "${deletedEvent.title}"`);
     setEditor({ open: false });
     fetchEvents(viewDate, view);
   }
@@ -415,7 +418,7 @@ function CalendarPageInner() {
   return (
     <div className="flex h-screen font-sans" style={{ background: 'linear-gradient(135deg, #eef2ff 0%, #f5f3ff 40%, #fdf4ff 100%)' }}>
       {/* Left Sidebar */}
-      <aside className="w-64 border-r border-indigo-100/60 bg-white/80 backdrop-blur-sm flex flex-col flex-shrink-0 overflow-hidden">
+      <aside className="hidden md:flex w-64 border-r border-indigo-100/60 bg-white/80 backdrop-blur-sm flex-col flex-shrink-0 overflow-hidden">
         <div className="flex flex-col gap-3 p-4 pb-2">
           <div className="flex items-center gap-2">
             <span className="text-2xl">🗓</span>
@@ -450,18 +453,10 @@ function CalendarPageInner() {
           <BudgetPanel onEdit={() => setBudgetEditOpen(true)} />
         </div>
 
-        {/* 弹性空白：把语音+设置推到底部 */}
+        {/* 弹性空白：把设置推到底部 */}
         <div className="flex-1" />
 
         <div className="px-4 pb-4 pt-2 flex flex-col gap-3">
-          <button
-            onClick={() => openVoiceWithDraft()}
-            className="flex items-center justify-center gap-2 border border-gray-200 rounded-lg p-3 text-sm text-gray-600 hover:bg-gray-50 hover:border-blue-300 transition"
-          >
-            <span className="text-base">🎙</span>
-            {t('voiceInput')}
-          </button>
-
           <SettingsPanel
             googleConnected={googleConnected}
             syncing={syncing}
@@ -479,7 +474,7 @@ function CalendarPageInner() {
 
       {/* Main Area */}
       <main
-        className="flex-1 flex flex-col overflow-hidden"
+        className="flex-1 flex flex-col overflow-hidden pb-16 md:pb-20"
         style={
           bgType !== 'none' && bgValue
             ? { backgroundImage: `url(${bgValue})`, backgroundSize: 'cover', backgroundPosition: 'center' }
@@ -549,7 +544,9 @@ function CalendarPageInner() {
               <button
                 key={v}
                 onClick={() => { setView(v); setShowYearPicker(false); }}
-                className={`px-3 py-1 text-sm transition-colors ${
+                className={`px-2 md:px-3 py-1 text-xs md:text-sm transition-colors ${
+                  v === 'year' ? 'hidden md:block' : ''
+                } ${
                   view === v
                     ? 'bg-blue-600 text-white'
                     : 'text-gray-600 hover:bg-gray-100'
@@ -629,11 +626,52 @@ function CalendarPageInner() {
         />
       )}
 
+      {/* Voice FAB - 语音优先核心入口，桌面端居中悬浮（移动端用 Action Bar） */}
+      <button
+        onClick={() => openVoiceWithDraft()}
+        className="hidden md:flex fixed bottom-6 left-1/2 -translate-x-1/2 z-[90] items-center gap-2 bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white rounded-full px-5 py-3.5 shadow-lg shadow-indigo-200 transition-all"
+        aria-label={t('voiceInput')}
+      >
+        <span className="text-xl">🎙</span>
+        <span className="text-sm font-medium">{t('voiceInputFab')}</span>
+      </button>
+
+      {/* 移动端底部 Action Bar（md 以上隐藏，FAB 替代） */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-[90] bg-white/95 backdrop-blur-sm border-t border-gray-200 flex items-center justify-around px-4 py-2">
+        <button
+          onClick={goToToday}
+          className="flex flex-col items-center gap-0.5 px-4 py-1.5 text-gray-600 hover:text-indigo-600 transition"
+        >
+          <span className="text-lg">📅</span>
+          <span className="text-xs">{t('today')}</span>
+        </button>
+        <button
+          onClick={() => openVoiceWithDraft()}
+          className="flex flex-col items-center gap-0.5 px-5 py-2 bg-indigo-500 text-white rounded-2xl hover:bg-indigo-600 active:scale-95 transition shadow-sm shadow-indigo-200"
+        >
+          <span className="text-lg">🎙</span>
+          <span className="text-xs font-medium">{t('voiceInputFab')}</span>
+        </button>
+        <button
+          onClick={() => openCreateEditor()}
+          className="flex flex-col items-center gap-0.5 px-4 py-1.5 text-gray-600 hover:text-indigo-600 transition"
+        >
+          <span className="text-lg font-light">＋</span>
+          <span className="text-xs">{t('newBtn')}</span>
+        </button>
+      </div>
+
       {/* Undo toast */}
       {undoToast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[110] flex items-center gap-3 bg-gray-800 text-white text-sm px-4 py-2.5 rounded-full shadow-lg animate-fade-in">
-          <span>↩</span>
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[110] flex items-center gap-3 bg-gray-800 text-white text-sm px-4 py-2.5 rounded-full shadow-lg animate-fade-in">
+          <span>✓</span>
           <span>{undoToast}</span>
+          <button
+            onClick={() => handleUndoRef.current()}
+            className="ml-1 text-indigo-300 hover:text-white font-medium transition underline underline-offset-2"
+          >
+            {t('undoBtn')}
+          </button>
         </div>
       )}
 
