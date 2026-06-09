@@ -99,3 +99,63 @@ describe('exception 合并', () => {
     expect(jan15Instance?.title).toBe('临时替换会议');
   });
 });
+
+describe('addMonths 跨年溢出', () => {
+  it('1月31日加13个月 → 次年2月28日', () => {
+    const event = makeEvent({
+      recurrence: 'monthly',
+      startAt: new Date(2026, 0, 31, 9, 0).toISOString(),
+      endAt: new Date(2026, 0, 31, 10, 0).toISOString(),
+      recurrenceCount: 14,
+    });
+    const result = expandEvents([event], new Date(2027, 0, 1), new Date(2027, 2, 31));
+    const febInstance = result.find(e => new Date(e.startAt).getMonth() === 1 && new Date(e.startAt).getFullYear() === 2027);
+    expect(febInstance).toBeDefined();
+    expect(new Date(febInstance!.startAt).getDate()).toBe(28);
+  });
+});
+
+describe('recurrenceCount 语义（序列总次数）', () => {
+  it('monthly: originalStart 在 rangeStart 之前，count 消耗后范围内只显示剩余次数', () => {
+    // 事件从 2025-10-15 开始每月，recurrenceCount=5
+    // 到 2026-01-01 之前已展开3次（10/15, 11/15, 12/15），剩余2次
+    const event = makeEvent({
+      recurrence: 'monthly',
+      startAt: new Date(2025, 9, 15, 9, 0).toISOString(), // 2025-10-15
+      endAt: new Date(2025, 9, 15, 10, 0).toISOString(),
+      recurrenceCount: 5,
+      recurrenceEndAt: null,
+    });
+    const result = expandEvents([event], new Date(2026, 0, 1), new Date(2026, 5, 30));
+    // 剩余：2026-01-15, 2026-02-15（共2次，count 5 用完）
+    expect(result.length).toBe(2);
+  });
+
+  it('daily: originalStart 在 rangeStart 之前，count 消耗后范围内只显示剩余次数', () => {
+    // 事件从 2026-01-01 开始每天，recurrenceCount=5
+    // rangeStart = 2026-01-04，已消耗3次（1/1, 1/2, 1/3），剩余2次
+    const event = makeEvent({
+      recurrence: 'daily',
+      startAt: new Date(2026, 0, 1, 9, 0).toISOString(),
+      endAt: new Date(2026, 0, 1, 10, 0).toISOString(),
+      recurrenceCount: 5,
+    });
+    const result = expandEvents([event], new Date(2026, 0, 4), new Date(2026, 0, 31));
+    // 剩余：2026-01-04, 2026-01-05（共2次，count 5 用完）
+    expect(result.length).toBe(2);
+  });
+
+  it('weekly: originalStart 在 rangeStart 之前，count 消耗后范围内只显示剩余次数', () => {
+    // 事件从 2026-01-05（周一）开始每周，recurrenceCount=4
+    // rangeStart = 2026-01-19，已消耗2次（1/5, 1/12），剩余2次
+    const event = makeEvent({
+      recurrence: 'weekly',
+      startAt: new Date(2026, 0, 5, 9, 0).toISOString(),
+      endAt: new Date(2026, 0, 5, 10, 0).toISOString(),
+      recurrenceCount: 4,
+    });
+    const result = expandEvents([event], new Date(2026, 0, 19), new Date(2026, 1, 28));
+    // 剩余：2026-01-19, 2026-01-26（共2次，count 4 用完）
+    expect(result.length).toBe(2);
+  });
+});

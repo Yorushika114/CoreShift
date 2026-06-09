@@ -17,13 +17,13 @@ type ExceptionRecord = {
 
 /** 给某月某日加 N 个月，溢出时取当月最后一天 */
 function addMonths(date: Date, months: number): Date {
+  const originalDay = date.getDate();
   const result = new Date(date);
-  const targetMonth = result.getMonth() + months;
-  result.setMonth(targetMonth);
-  // 溢出检测：setMonth 会自动进位（如 1月31日+1月 → 3月3日），需要修正
-  if (result.getMonth() !== ((targetMonth % 12) + 12) % 12) {
-    result.setDate(0); // 退到上个月最后一天
-  }
+  result.setDate(1); // 先设为1号，避免中间计算溢出
+  result.setMonth(result.getMonth() + months);
+  // 取当月最后一天（下月第0天）
+  const lastDay = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate();
+  result.setDate(Math.min(originalDay, lastDay));
   return result;
 }
 
@@ -70,15 +70,23 @@ export function expandEvents(
 
     if (event.recurrence === 'daily' || event.recurrence === 'weekly') {
       const stepMs = event.recurrence === 'daily' ? DAY_MS : WEEK_MS;
-      let instanceStart = new Date(originalStart);
-      if (instanceStart < rangeStart) {
-        const stepsForward = Math.ceil(
-          (rangeStart.getTime() - instanceStart.getTime()) / stepMs,
-        );
-        instanceStart = new Date(instanceStart.getTime() + stepsForward * stepMs);
+      const originalStartMs = originalStart.getTime();
+
+      // 计算从 originalStart 到 rangeStart 之间有多少步（即已消耗的次数）
+      let countOffset = 0;
+      if (originalStart < rangeStart) {
+        countOffset = Math.ceil((rangeStart.getTime() - originalStartMs) / stepMs);
       }
 
-      let count = 0;
+      // 如果 recurrenceCount 已经用完，跳过此事件
+      if (event.recurrenceCount !== null && event.recurrenceCount !== undefined && countOffset >= event.recurrenceCount) {
+        continue;
+      }
+
+      // 从 rangeStart 附近的实例开始展开，count 从已消耗的次数起算
+      let instanceStart = new Date(originalStartMs + countOffset * stepMs);
+      let count = countOffset;
+
       while (instanceStart <= effectiveEnd) {
         if (event.recurrenceCount !== null && event.recurrenceCount !== undefined && count >= event.recurrenceCount) break;
 
