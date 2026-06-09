@@ -453,19 +453,10 @@ function CalendarPageInner() {
           <BudgetPanel onEdit={() => setBudgetEditOpen(true)} />
         </div>
 
-        {/* 弹性空白：把语音+设置推到底部 */}
+        {/* 弹性空白：把设置推到底部 */}
         <div className="flex-1" />
 
         <div className="px-4 pb-4 pt-2 flex flex-col gap-3">
-          {/* 侧边栏语音入口：桌面端备用入口 */}
-          <button
-            onClick={() => openVoiceWithDraft()}
-            className="flex items-center justify-center gap-2 border border-gray-200 rounded-lg p-3 text-sm text-gray-500 hover:bg-gray-50 hover:border-indigo-300 transition"
-          >
-            <span className="text-base">🎙</span>
-            {t('voiceInput')}
-          </button>
-
           <SettingsPanel
             googleConnected={googleConnected}
             syncing={syncing}
@@ -478,7 +469,7 @@ function CalendarPageInner() {
 
       {/* Main Area */}
       <main
-        className="flex-1 flex flex-col overflow-hidden pb-16 md:pb-0"
+        className="flex-1 flex flex-col overflow-hidden pb-16 md:pb-20"
         style={
           bgType !== 'none' && bgValue
             ? { backgroundImage: `url(${bgValue})`, backgroundSize: 'cover', backgroundPosition: 'center' }
@@ -630,10 +621,10 @@ function CalendarPageInner() {
         />
       )}
 
-      {/* Voice FAB - 语音优先核心入口，桌面端专用（移动端用 Action Bar） */}
+      {/* Voice FAB - 语音优先核心入口，桌面端居中悬浮（移动端用 Action Bar） */}
       <button
         onClick={() => openVoiceWithDraft()}
-        className="hidden md:flex fixed bottom-6 right-6 z-[90] items-center gap-2 bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white rounded-full px-5 py-3.5 shadow-lg shadow-indigo-200 transition-all"
+        className="hidden md:flex fixed bottom-6 left-1/2 -translate-x-1/2 z-[90] items-center gap-2 bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white rounded-full px-5 py-3.5 shadow-lg shadow-indigo-200 transition-all"
         aria-label={t('voiceInput')}
       >
         <span className="text-xl">🎙</span>
