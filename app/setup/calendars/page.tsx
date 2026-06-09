@@ -66,7 +66,8 @@ export default function SetupCalendarsPage() {
     fetch('/api/google/calendars/select/current')
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
-        if (data?.syncDirection) setSyncDirection(data.syncDirection);
+        const validDirs = ['pull', 'push', 'both'] as const;
+        if (validDirs.includes(data?.syncDirection)) setSyncDirection(data.syncDirection);
       })
       .catch(() => {});
   }, []);
