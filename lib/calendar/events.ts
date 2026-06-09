@@ -10,6 +10,8 @@ function toCalendarEvent(e: {
   reminderAt: Date | null;
   allDay: boolean;
   recurrence: string | null;
+  recurrenceEndAt: Date | null;
+  recurrenceCount: number | null;
   color: string;
   createdAt: Date;
   updatedAt: Date;
@@ -23,6 +25,8 @@ function toCalendarEvent(e: {
     reminderAt: e.reminderAt?.toISOString() ?? null,
     allDay: e.allDay,
     recurrence: e.recurrence ?? null,
+    recurrenceEndAt: e.recurrenceEndAt?.toISOString() ?? null,
+    recurrenceCount: e.recurrenceCount ?? null,
     color: e.color,
     createdAt: e.createdAt.toISOString(),
     updatedAt: e.updatedAt.toISOString(),
@@ -57,7 +61,8 @@ export async function getEvents(userId: string, startDate?: Date, endDate?: Date
 export async function createEvent(
   userId: string,
   data: Pick<CalendarEvent, 'title' | 'startAt'> &
-    Partial<Pick<CalendarEvent, 'id' | 'endAt' | 'reminderAt' | 'allDay' | 'recurrence' | 'sourceText' | 'color'>>
+<<<<<<< HEAD
+    Partial<Pick<CalendarEvent, 'id' | 'endAt' | 'reminderAt' | 'allDay' | 'recurrence' | 'recurrenceEndAt' | 'recurrenceCount' | 'sourceText' | 'color'>>
 ): Promise<CalendarEvent> {
   const event = await prisma.event.create({
     data: {
@@ -69,6 +74,8 @@ export async function createEvent(
       reminderAt: data.reminderAt ? new Date(data.reminderAt) : null,
       allDay: data.allDay ?? false,
       recurrence: data.recurrence ?? null,
+      recurrenceEndAt: data.recurrenceEndAt ? new Date(data.recurrenceEndAt) : null,
+      recurrenceCount: data.recurrenceCount ?? null,
       color: data.color ?? 'blue',
       sourceText: data.sourceText ?? null,
     },
@@ -79,7 +86,7 @@ export async function createEvent(
 export async function updateEvent(
   userId: string,
   id: string,
-  data: Partial<Pick<CalendarEvent, 'title' | 'startAt' | 'endAt' | 'reminderAt' | 'allDay' | 'recurrence' | 'sourceText' | 'color'>>
+  data: Partial<Pick<CalendarEvent, 'title' | 'startAt' | 'endAt' | 'reminderAt' | 'allDay' | 'recurrence' | 'recurrenceEndAt' | 'recurrenceCount' | 'sourceText' | 'color'>>
 ): Promise<CalendarEvent> {
   const event = await prisma.event.update({
     where: { id, userId },
@@ -90,6 +97,8 @@ export async function updateEvent(
       ...(data.reminderAt !== undefined && { reminderAt: data.reminderAt ? new Date(data.reminderAt) : null }),
       ...(data.allDay !== undefined && { allDay: data.allDay }),
       ...(data.recurrence !== undefined && { recurrence: data.recurrence ?? null }),
+      ...(data.recurrenceEndAt !== undefined && { recurrenceEndAt: data.recurrenceEndAt ? new Date(data.recurrenceEndAt) : null }),
+      ...(data.recurrenceCount !== undefined && { recurrenceCount: data.recurrenceCount ?? null }),
       ...(data.color !== undefined && { color: data.color ?? 'blue' }),
       ...(data.sourceText !== undefined && { sourceText: data.sourceText }),
     },

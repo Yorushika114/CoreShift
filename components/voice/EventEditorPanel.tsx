@@ -21,6 +21,25 @@ type Tab = 'quick' | 'manual';
 
 const REMINDER_VALUES = ['', '5', '10', '15', '30', '60', '120', '1440'];
 
+function formatRecurrenceSummary(
+  recurrence: 'daily' | 'weekly' | 'monthly',
+  endAt?: string | null,
+  count?: number | null,
+  isZh = true,
+): string {
+  const freqLabel = isZh
+    ? { daily: '每天', weekly: '每周', monthly: '每月' }[recurrence]
+    : { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' }[recurrence];
+  if (count != null && count > 0) return isZh ? `${freqLabel}，共 ${count} 次` : `${freqLabel}, ${count} times`;
+  if (endAt) {
+    const d = new Date(endAt);
+    return isZh
+      ? `${freqLabel}，到 ${d.getMonth() + 1}月${d.getDate()}日`
+      : `${freqLabel}, until ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+  }
+  return isZh ? `${freqLabel}，无限重复` : `${freqLabel}, indefinitely`;
+}
+
 function getReminderOffset(startIso: string, reminderIso: string): string {
   const offsetMin = Math.round(
     (new Date(startIso).getTime() - new Date(reminderIso).getTime()) / 60000,
@@ -95,9 +114,10 @@ export function EventEditorPanel({
     event?.endAt ? toInputTime(event.endAt) : toInputTime(defaultEndDate),
   );
   const [allDay, setAllDay] = useState(event?.allDay ?? false);
-  const [recurrence, setRecurrence] = useState<'' | 'daily' | 'weekly'>(
+  const [recurrence, setRecurrence] = useState<'' | 'daily' | 'weekly' | 'monthly'>(
     event?.recurrence === 'daily' ? 'daily'
     : event?.recurrence === 'weekly' ? 'weekly'
+    : event?.recurrence === 'monthly' ? 'monthly'
     : '',
   );
   const [reminderOffset, setReminderOffset] = useState<string>(() => {
@@ -165,7 +185,9 @@ export function EventEditorPanel({
           endAt: parsed.endAt ?? null,
           reminderAt: parsed.reminderAt ?? null,
           allDay: false,
-          recurrence: null,
+          recurrence: parsed.recurrence ?? null,
+          recurrenceEndAt: parsed.recurrenceEndAt ?? null,
+          recurrenceCount: parsed.recurrenceCount ?? null,
           color,
           sourceText: nlpInput.trim(),
         };
@@ -205,12 +227,22 @@ export function EventEditorPanel({
           reminderAt: computedReminderAt,
           allDay,
           recurrence: recurrence || null,
+          recurrenceEndAt: null,
+          recurrenceCount: null,
           color,
         };
       }
 
-      const url = isEdit ? `/api/events/${event!.id}` : '/api/events';
+      let url: string;
       const method = isEdit ? 'PUT' : 'POST';
+      if (isEdit) {
+        const recurringMode = (event as CalendarEvent & { _recurringMode?: string })?._recurringMode;
+        url = recurringMode
+          ? `/api/events/${encodeURIComponent(event!.id)}?mode=${recurringMode}`
+          : `/api/events/${encodeURIComponent(event!.id)}`;
+      } else {
+        url = '/api/events';
+      }
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -363,6 +395,17 @@ export function EventEditorPanel({
                     </span>
                   </div>
                 )}
+                {parsed.recurrence && (
+                  <div className="flex items-center gap-1.5 text-sm text-indigo-600 mt-1">
+                    <span>↻</span>
+                    <span>{formatRecurrenceSummary(
+                      parsed.recurrence,
+                      parsed.recurrenceEndAt,
+                      parsed.recurrenceCount,
+                      language === 'zh'
+                    )}</span>
+                  </div>
+                )}
                 {parsed.ambiguities.map((msg, i) => (
                   <p key={i} className="text-xs text-amber-600 flex items-center gap-1">
                     <span>⚠</span>{msg}
@@ -491,12 +534,13 @@ export function EventEditorPanel({
               <label className="block text-xs text-gray-500 mb-1">{t('repeat')}</label>
               <select
                 value={recurrence}
-                onChange={e => setRecurrence(e.target.value as '' | 'daily' | 'weekly')}
+                onChange={e => setRecurrence(e.target.value as '' | 'daily' | 'weekly' | 'monthly')}
                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400 transition bg-white"
               >
                 <option value="">{t('noRepeat')}</option>
                 <option value="daily">{t('dailyRepeat')}</option>
                 <option value="weekly">{t('weeklyRepeat')}</option>
+                <option value="monthly">{language === 'zh' ? '每月' : 'Monthly'}</option>
               </select>
             </div>
           </div>

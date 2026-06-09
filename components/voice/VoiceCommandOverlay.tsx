@@ -9,6 +9,8 @@ import { applyModify } from '@/lib/voice/applyModify';
 import { formatDateCN, formatTimeCN } from '@/lib/calendar/date-utils';
 import { useSettings } from '@/contexts/SettingsContext';
 import type { BudgetProgress, CalendarEvent, ParsedCommand } from '@/types';
+import { RecurringActionDialog, type RecurringActionMode } from './RecurringActionDialog';
+import { realEventId } from '@/lib/calendar/recurrence';
 
 interface Props {
   /** create / unknown：把原文交给页面，打开编辑面板预填。 */
@@ -26,7 +28,7 @@ interface Props {
 
 type Result =
   | { kind: 'notfound'; intent: 'delete' | 'modify' }
-  | { kind: 'delete'; events: CalendarEvent[]; approximate?: boolean }
+  | { kind: 'delete'; events: CalendarEvent[]; approximate?: boolean; isAllTitleMatch?: boolean }
   | { kind: 'modify-pick'; events: CalendarEvent[]; pick: (e: CalendarEvent) => void; approximate?: boolean }
   | { kind: 'query'; date: Date; events: CalendarEvent[]; aiSummary?: string }
   | { kind: 'summarize'; summary: string; events: CalendarEvent[]; rangeLabel: string }
@@ -77,6 +79,13 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
   const [lang, setLang] = useState<'zh-CN' | 'en-US'>(language === 'en' ? 'en-US' : 'zh-CN');
   const [ttsEnabled, setTtsEnabled] = useState(true);
   const [summaryListOpen, setSummaryListOpen] = useState(false);
+  const [multiSelectMode, setMultiSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [recurringDialog, setRecurringDialog] = useState<{
+    action: 'delete' | 'modify';
+    event: CalendarEvent;
+  } | null>(null);
+  const [batchDeleting, setBatchDeleting] = useState(false);
   const { supported, listening, interimText, error, start, stop } = useSpeechRecognition({
     lang,
     onResult: (text) => { if (text) void handleCommand(text); },
@@ -111,12 +120,16 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
   async function handleCommand(text: string) {
     setActionError(null);
     setResult(null);
+    setMultiSelectMode(false);
+    setSelectedIds(new Set());
     if (/^退出$|^关闭$|^取消$|^exit$|^close$|^cancel$/i.test(text.trim())) {
       handleClose();
       return;
     }
 
     setBusy(true);
+    // 与 LLM parse 并行预取事件，delete/modify 直接复用，query/summarize 按范围过滤
+    const wideEventsPromise = fetchRange(wideRange());
     try {
       const parsed = await parseVoiceCommandWithLLM(text, lang, new Date(), timezone);
 
@@ -139,36 +152,40 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
           ? new Date(parsed.queryRangeEnd)
           : dayRange(targetDate)[1];
 
-        const events = await fetchRange([fetchStart, fetchEnd]);
-        onQuery(targetDate);
-
-        let aiSummary: string | undefined;
-        try {
-          const summaryRes = await fetch('/api/llm/summarize', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              question: text,
-              events,
-              lang,
-              rangeStart: fetchStart.toISOString(),
-              rangeEnd: fetchEnd.toISOString(),
-            }),
+        // 若请求范围在预取窗口内，直接过滤；否则单独 fetch
+        const [wStart, wEnd] = wideRange();
+        let events: CalendarEvent[];
+        if (fetchStart >= wStart && fetchEnd <= wEnd) {
+          const all = await wideEventsPromise;
+          events = all.filter(e => {
+            const d = new Date(e.startAt);
+            return d >= fetchStart && d <= fetchEnd;
           });
-          if (summaryRes.ok) {
-            const { summary } = await summaryRes.json() as { summary: string };
-            aiSummary = summary;
-          }
-        } catch {}
+        } else {
+          events = await fetchRange([fetchStart, fetchEnd]);
+        }
 
-        setResult({ kind: 'query', date: targetDate, events, aiSummary });
-        speak(aiSummary ?? (
-          events.length === 0
-            ? (lang === 'en-US' ? 'No events found' : `${formatDateCN(targetDate)}没有安排`)
-            : (lang === 'en-US'
-                ? `Found ${events.length} event${events.length > 1 ? 's' : ''}`
-                : `${formatDateCN(targetDate)}有${events.length}个安排`)
-        ));
+        onQuery(targetDate);
+        // 立即展示列表，AI 摘要异步后台生成
+        setResult({ kind: 'query', date: targetDate, events, aiSummary: undefined });
+        setBusy(false);
+        speak(events.length === 0
+          ? (lang === 'en-US' ? 'No events found' : `${formatDateCN(targetDate)}没有安排`)
+          : (lang === 'en-US'
+              ? `Found ${events.length} event${events.length > 1 ? 's' : ''}`
+              : `${formatDateCN(targetDate)}有${events.length}个安排`)
+        );
+        fetch('/api/llm/summarize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question: text, events, lang, rangeStart: fetchStart.toISOString(), rangeEnd: fetchEnd.toISOString() }),
+        })
+          .then(r => r.ok ? r.json() as Promise<{ summary: string }> : null)
+          .then(data => {
+            if (!data) return;
+            setResult(prev => prev?.kind === 'query' ? { ...prev, aiSummary: data.summary } : prev);
+          })
+          .catch(() => {});
         return;
       }
 
@@ -181,27 +198,38 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
           : dayRange(new Date())[1];
 
         setSummaryListOpen(false);
-        const events = await fetchRange([fetchStart, fetchEnd]);
-        const summaryRes = await fetch('/api/llm/schedule-summary', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            events,
-            lang,
-            rangeStart: fetchStart.toISOString(),
-            rangeEnd: fetchEnd.toISOString(),
-            tz: timezone,
-          }),
-        });
-        const { summary } = summaryRes.ok
-          ? (await summaryRes.json() as { summary: string })
-          : { summary: lang === 'en-US' ? 'Could not generate summary.' : '摘要生成失败。' };
+
+        const [wStart, wEnd] = wideRange();
+        let events: CalendarEvent[];
+        if (fetchStart >= wStart && fetchEnd <= wEnd) {
+          const all = await wideEventsPromise;
+          events = all.filter(e => {
+            const d = new Date(e.startAt);
+            return d >= fetchStart && d <= fetchEnd;
+          });
+        } else {
+          events = await fetchRange([fetchStart, fetchEnd]);
+        }
 
         const rangeLabel = parsed.queryRangeStart
           ? new Date(parsed.queryRangeStart).toLocaleDateString(lang === 'en-US' ? 'en-US' : 'zh-CN', { month: 'short', day: 'numeric' })
           : '';
-        setResult({ kind: 'summarize', summary, events, rangeLabel });
-        if (ttsEnabled) speak(summary);
+        const loadingMsg = lang === 'en-US' ? 'Generating summary…' : '摘要生成中…';
+        setResult({ kind: 'summarize', summary: loadingMsg, events, rangeLabel });
+        setBusy(false);
+
+        fetch('/api/llm/schedule-summary', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ events, lang, rangeStart: fetchStart.toISOString(), rangeEnd: fetchEnd.toISOString(), tz: timezone }),
+        })
+          .then(r => r.ok ? r.json() as Promise<{ summary: string }> : null)
+          .then(data => {
+            const summary = data?.summary ?? (lang === 'en-US' ? 'Could not generate summary.' : '摘要生成失败。');
+            setResult(prev => prev?.kind === 'summarize' ? { ...prev, summary } : prev);
+            if (ttsEnabled) speak(summary);
+          })
+          .catch(() => {});
         return;
       }
 
@@ -236,11 +264,15 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
         return;
       }
 
-      const events = await fetchRange(wideRange());
+      // delete / modify：直接用预取结果（与 parse 并行，大概率已就绪）
+      const events = await wideEventsPromise;
+      // 没指定日期但有标题时（如"删除所有睡觉事件"），不限返回数量
+      const noCap = !parsed.hasDate && !!parsed.title;
       const { results, tier } = matchEvents(events, {
         date: targetDate,
         hasDate: parsed.hasDate,
         title: parsed.title,
+        noCap,
       });
 
       if (results.length === 0) {
@@ -249,23 +281,25 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
         return;
       }
 
-      const approximate = tier !== 'exact';
+      // 指定了日期但未精确命中 → approximate；未指定日期但标题命中 → 非 approximate（这是"全量"搜索）
+      const approximate = tier !== 'exact' && (tier === 'all' || !!parsed.hasDate);
+      const isAllTitleMatch = tier === 'fuzzy' && !parsed.hasDate && !!parsed.title;
 
       if (parsed.intent === 'modify') {
         if (tier === 'exact' && results.length === 1) {
-          onModify(applyModify(results[0], parsed));
+          handleModifyEvent(applyModify(results[0], parsed));
           return;
         }
         setResult({
           kind: 'modify-pick',
           events: results,
           approximate,
-          pick: (e) => onModify(applyModify(e, parsed)),
+          pick: (e) => handleModifyEvent(applyModify(e, parsed)),
         });
         return;
       }
 
-      setResult({ kind: 'delete', events: results, approximate });
+      setResult({ kind: 'delete', events: results, approximate, isAllTitleMatch });
     } catch {
       setActionError(lang === 'en-US' ? 'Processing failed, please try again' : '处理失败，请重试');
       speak(lang === 'en-US' ? 'Processing failed, please try again' : '处理失败，请重试');
@@ -284,18 +318,79 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
     if (t) void handleCommand(t);
   }
 
-  async function handleDelete(id: string) {
-    setDeletingId(id);
+  async function doDelete(id: string, mode: RecurringActionMode) {
+    const targetId = mode === 'all' ? realEventId(id) : id;
+    setDeletingId(targetId);
     setActionError(null);
     try {
-      const res = await fetch(`/api/events/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error();
+      const res = await fetch(`/api/events/${encodeURIComponent(targetId)}?mode=${mode}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error('删除失败');
       speak(language === 'zh' ? '已成功删除' : 'Successfully deleted');
+      setResult(null);
       onChanged();
-      onClose();
     } catch {
-      setActionError(language === 'zh' ? '删除失败，请重试' : 'Delete failed, please retry');
+      setActionError(language === 'zh' ? '删除失败，请重试' : 'Delete failed, please try again');
+    } finally {
       setDeletingId(null);
+    }
+  }
+
+  function handleDeleteEvent(event: CalendarEvent) {
+    if (event.recurrence || event.id.includes('::')) {
+      setRecurringDialog({ action: 'delete', event });
+      return;
+    }
+    void doDelete(event.id, 'all');
+  }
+
+  function handleModifyEvent(event: CalendarEvent) {
+    if (event.recurrence || event.id.includes('::')) {
+      setRecurringDialog({ action: 'modify', event });
+      return;
+    }
+    onModify(event);
+  }
+
+  async function handleBatchDelete() {
+    if (!result || result.kind !== 'delete' || batchDeleting) return;
+    const toDelete = result.events.filter(e => selectedIds.has(e.id));
+    if (toDelete.length === 0) return;
+
+    setBatchDeleting(true);
+    setActionError(null);
+    const deletedIds = new Set<string>();
+    let errorCount = 0;
+
+    for (const event of toDelete) {
+      setDeletingId(event.id);
+      try {
+        const res = await fetch(`/api/events/${event.id}`, { method: 'DELETE' });
+        if (res.ok) {
+          deletedIds.add(event.id);
+          onChanged();
+        } else {
+          errorCount++;
+        }
+      } catch {
+        errorCount++;
+      }
+    }
+
+    setDeletingId(null);
+    setBatchDeleting(false);
+    setResult(prev => {
+      if (!prev || prev.kind !== 'delete') return prev;
+      return { ...prev, events: prev.events.filter(e => !deletedIds.has(e.id)) };
+    });
+    setSelectedIds(new Set());
+
+    if (deletedIds.size > 0) {
+      speak(language === 'zh' ? `已删除 ${deletedIds.size} 个安排` : `Deleted ${deletedIds.size} events`);
+    }
+    if (errorCount > 0) {
+      setActionError(language === 'zh' ? `${errorCount} 个删除失败，请重试` : `${errorCount} deletions failed, please retry`);
     }
   }
 
@@ -397,21 +492,101 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
                 {result.approximate && (
                   <p className="text-xs text-amber-600">{t('noExactMatchDelete')}</p>
                 )}
-                <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">{t('confirmDeleteTitle')}</p>
-                <div className="space-y-2">
-                  {result.events.map((e) => (
-                    <div key={e.id} className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3 flex items-center gap-3">
-                      <div className="flex-1 min-w-0">{eventRow(e)}</div>
-                      <button
-                        onClick={() => handleDelete(e.id)}
-                        disabled={deletingId === e.id}
-                        className="text-sm text-white bg-red-500 hover:bg-red-600 px-3 py-1 rounded-full transition disabled:opacity-50 flex-shrink-0"
-                      >
-                        {deletingId === e.id ? t('deleting') : t('delete')}
-                      </button>
-                    </div>
-                  ))}
+                {result.isAllTitleMatch && (
+                  <p className="text-xs text-blue-500">
+                    {lang === 'zh-CN' ? '找到以下全部匹配安排：' : 'All matching events found:'}
+                  </p>
+                )}
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">{t('confirmDeleteTitle')}</p>
+                  {result.events.length > 0 && !multiSelectMode && (
+                    <button
+                      onClick={() => setMultiSelectMode(true)}
+                      className="text-xs text-blue-500 hover:text-blue-700 transition"
+                    >
+                      {lang === 'zh-CN' ? '多选' : 'Select'}
+                    </button>
+                  )}
+                  {multiSelectMode && (
+                    <button
+                      onClick={() => { setMultiSelectMode(false); setSelectedIds(new Set()); }}
+                      className="text-xs text-gray-400 hover:text-gray-600 transition"
+                    >
+                      {lang === 'zh-CN' ? '取消多选' : 'Cancel'}
+                    </button>
+                  )}
                 </div>
+                {multiSelectMode && result.events.length > 0 && (
+                  <div className="flex items-center gap-2 px-1">
+                    <input
+                      type="checkbox"
+                      id="select-all-events"
+                      checked={selectedIds.size === result.events.length}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedIds(new Set(result.events.map(ev => ev.id)));
+                        } else {
+                          setSelectedIds(new Set());
+                        }
+                      }}
+                      className="rounded"
+                    />
+                    <label htmlFor="select-all-events" className="text-xs text-gray-500 cursor-pointer">
+                      {lang === 'zh-CN' ? '全选' : 'Select all'}
+                    </label>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  {result.events.length === 0 ? (
+                    <p className="text-sm text-gray-400 text-center py-2">
+                      {lang === 'zh-CN' ? '暂无安排' : 'No events'}
+                    </p>
+                  ) : (
+                    result.events.map((e) => (
+                      <div key={e.id} className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3 flex items-center gap-3">
+                        {multiSelectMode && (
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(e.id)}
+                            onChange={(ev) => {
+                              setSelectedIds(prev => {
+                                const next = new Set(prev);
+                                if (ev.target.checked) next.add(e.id);
+                                else next.delete(e.id);
+                                return next;
+                              });
+                            }}
+                            className="rounded flex-shrink-0"
+                            disabled={batchDeleting || deletingId === e.id}
+                          />
+                        )}
+                        <div className="flex-1 min-w-0">{eventRow(e)}</div>
+                        {!multiSelectMode && (
+                          <button
+                            onClick={() => handleDeleteEvent(e)}
+                            disabled={deletingId === e.id}
+                            className="text-sm text-white bg-red-500 hover:bg-red-600 px-3 py-1 rounded-full transition disabled:opacity-50 flex-shrink-0"
+                          >
+                            {deletingId === e.id ? t('deleting') : t('delete')}
+                          </button>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+                {multiSelectMode && (
+                  <div className="flex justify-end pt-1">
+                    <button
+                      onClick={handleBatchDelete}
+                      disabled={selectedIds.size === 0 || batchDeleting}
+                      className="px-4 py-1.5 text-sm bg-red-500 text-white rounded-full hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                    >
+                      {batchDeleting
+                        ? (lang === 'zh-CN' ? '删除中...' : 'Deleting...')
+                        : (lang === 'zh-CN' ? `删除选中（${selectedIds.size}）` : `Delete (${selectedIds.size})`)}
+                    </button>
+                  </div>
+                )}
               </>
             )}
 
@@ -824,6 +999,22 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
           </div>
         )}
       </div>
+      {recurringDialog && (
+        <RecurringActionDialog
+          action={recurringDialog.action}
+          onCancel={() => setRecurringDialog(null)}
+          onSelect={async (mode) => {
+            const { event } = recurringDialog;
+            setRecurringDialog(null);
+            if (recurringDialog.action === 'delete') {
+              await doDelete(event.id, mode);
+            } else {
+              // modify：把 mode 附加到 event 上传给父组件
+              onModify({ ...event, _recurringMode: mode } as unknown as CalendarEvent);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

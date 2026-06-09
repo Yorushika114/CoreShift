@@ -1,6 +1,68 @@
 import { parseChineseTime, extractReminderOffset } from './parseChineseTime';
 import type { ParsedCommand } from '@/types';
 
+/** 从文本提取重复频率 */
+function extractRecurrence(text: string, lang: 'zh-CN' | 'en-US'): 'daily' | 'weekly' | 'monthly' | null {
+  if (lang === 'en-US') {
+    if (/every\s+day|daily/i.test(text)) return 'daily';
+    if (/every\s+week|weekly/i.test(text)) return 'weekly';
+    if (/every\s+month|monthly/i.test(text)) return 'monthly';
+    return null;
+  }
+  if (/每天|每日/.test(text)) return 'daily';
+  if (/每周|每星期/.test(text)) return 'weekly';
+  if (/每月|每个月/.test(text)) return 'monthly';
+  return null;
+}
+
+/** 从文本提取重复截止条件 */
+function extractRecurrenceEnd(
+  text: string,
+  fallback: Date,
+): { recurrenceEndAt: string | null; recurrenceCount: number | null } {
+  // 次数：共N次 / 做N次
+  const countMatch = text.match(/(?:共|做)(\d+)次/);
+  if (countMatch) {
+    return { recurrenceEndAt: null, recurrenceCount: parseInt(countMatch[1]) };
+  }
+
+  // 时长换算：持续N个月 / 做N个月（次数匹配优先，避免和"做N次"冲突）
+  const durationMatch = text.match(/(?:持续|做)(\d+)个?月/);
+  if (durationMatch) {
+    const months = parseInt(durationMatch[1]);
+    const endDate = new Date(fallback);
+    endDate.setDate(1);
+    endDate.setMonth(endDate.getMonth() + months);
+    const lastDay = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0).getDate();
+    endDate.setDate(Math.min(fallback.getDate(), lastDay));
+    return { recurrenceEndAt: endDate.toISOString(), recurrenceCount: null };
+  }
+
+  // 截止到月底：开到X月底 / 到X月底
+  const monthEndMatch = text.match(/(?:开到|到)(\d{1,2})月底/);
+  if (monthEndMatch) {
+    const month = parseInt(monthEndMatch[1]) - 1; // 0-indexed
+    const year = month < fallback.getMonth() ? fallback.getFullYear() + 1 : fallback.getFullYear();
+    // 当月最后一天：下月第0天
+    const endDate = new Date(year, month + 1, 0, 23, 59, 59);
+    return { recurrenceEndAt: endDate.toISOString(), recurrenceCount: null };
+  }
+
+  // 截止到具体日期：开到X月X号/日 / 到X月X号/日
+  const dateMatch = text.match(/(?:开到|到)(\d{1,2})月(\d{1,2})[号日]/);
+  if (dateMatch) {
+    const month = parseInt(dateMatch[1]) - 1;
+    const day = parseInt(dateMatch[2]);
+    const year = (month < fallback.getMonth() || (month === fallback.getMonth() && day < fallback.getDate()))
+      ? fallback.getFullYear() + 1
+      : fallback.getFullYear();
+    const endDate = new Date(year, month, day, 23, 59, 59);
+    return { recurrenceEndAt: endDate.toISOString(), recurrenceCount: null };
+  }
+
+  return { recurrenceEndAt: null, recurrenceCount: null };
+}
+
 // 时间相关词汇，用于从原文中剥离出标题
 const TIME_PATTERNS = [
   // "X点到Y点" 或 "X点，到，Y点" 或 "X点到明天早上Y点"：允许标点/空格，也允许日期词
@@ -230,6 +292,11 @@ export function parseVoiceCommand(
     ? new Date(resolvedDate.getTime() - reminderOffsetMin * 60 * 1000).toISOString()
     : undefined;
 
+  const recurrence = extractRecurrence(text, lang);
+  const { recurrenceEndAt, recurrenceCount } = recurrence
+    ? extractRecurrenceEnd(text, resolvedDate)
+    : { recurrenceEndAt: null, recurrenceCount: null };
+
   const isEn = lang === 'en-US';
   const ambiguities: string[] = [];
   if (!hasDate) {
@@ -259,6 +326,9 @@ export function parseVoiceCommand(
     clarificationQuestion: !title
       ? (isEn ? 'What is the title of this event?' : '请问这个事件的标题是什么？')
       : undefined,
+    recurrence,
+    recurrenceEndAt: recurrenceEndAt ?? null,
+    recurrenceCount: recurrenceCount ?? null,
   };
 }
 

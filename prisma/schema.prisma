@@ -16,6 +16,8 @@ model Event {
   reminderAt      DateTime?
   allDay          Boolean   @default(false)
   recurrence      String?
+  recurrenceEndAt DateTime?
+  recurrenceCount Int?
   color           String    @default("blue")
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -26,6 +28,7 @@ model Event {
   googleCalendarColor String?
   icsUid              String?   @unique
   icsSeriesUid        String?
+  exceptions      EventException[]
 }
 
 model TimeBudget {
@@ -50,4 +53,22 @@ model Session {
   createdAt              DateTime @default(now())
   selectedCalendarIds    String   @default("[]")
   defaultWriteCalendarId String   @default("primary")
+  syncDirection          String   @default("both")
+}
+
+model EventException {
+  id         String    @id @default(cuid())
+  eventId    String
+  event      Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  date       DateTime
+  isDeleted  Boolean   @default(false)
+  title      String?
+  startAt    DateTime?
+  endAt      DateTime?
+  reminderAt DateTime?
+  color      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([eventId, date])
 }

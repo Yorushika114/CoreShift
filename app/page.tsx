@@ -462,7 +462,7 @@ function CalendarPageInner() {
             {t('voiceInput')}
           </button>
 
-<SettingsPanel
+          <SettingsPanel
             googleConnected={googleConnected}
             syncing={syncing}
             syncMsg={syncMsg}

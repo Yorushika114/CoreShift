@@ -68,7 +68,11 @@ export async function deleteEventFromGoogle(googleEventId: string, googleCalenda
   await calendar.events.delete({ calendarId, eventId: googleEventId });
 }
 
-export async function syncFromGoogle(visitorId?: string, userId?: string): Promise<{ pulled: number; pushed: number }> {
+export async function syncFromGoogle(
+  visitorId?: string,
+  userId?: string,
+  direction: 'pull' | 'push' | 'both' = 'both'
+): Promise<{ pulled: number; pushed: number }> {
   const auth = await getAuthenticatedClient(visitorId);
   if (!auth || !userId) return { pulled: 0, pushed: 0 };
 
@@ -83,45 +87,63 @@ export async function syncFromGoogle(visitorId?: string, userId?: string): Promi
 
   let pulled = 0;
 
-  // 拉取所有选中日历的事件
-  for (const calendarId of calendarIds) {
-    let calendarColor = '#4285f4';
-    try {
-      const calMeta = await calendar.calendarList.get({ calendarId });
-      calendarColor = calMeta.data.backgroundColor ?? '#4285f4';
-    } catch {
-      // 获取日历颜色失败不阻断同步
-    }
+  // 拉取阶段：仅 pull 或 both 时执行
+  if (direction === 'pull' || direction === 'both') {
+    for (const calendarId of calendarIds) {
+      let calendarColor = '#4285f4';
+      try {
+        const calMeta = await calendar.calendarList.get({ calendarId });
+        calendarColor = calMeta.data.backgroundColor ?? '#4285f4';
+      } catch {
+        // 获取日历颜色失败不阻断同步
+      }
 
-    const res = await calendar.events.list({
-      calendarId,
-      timeMin: timeMin.toISOString(),
-      timeMax: timeMax.toISOString(),
-      singleEvents: true,
-      orderBy: 'startTime',
-      maxResults: 500,
-    });
+      const res = await calendar.events.list({
+        calendarId,
+        timeMin: timeMin.toISOString(),
+        timeMax: timeMax.toISOString(),
+        singleEvents: true,
+        orderBy: 'startTime',
+        maxResults: 500,
+      });
 
-    const googleEvents = res.data.items ?? [];
+      const googleEvents = res.data.items ?? [];
 
-    for (const gEvent of googleEvents) {
-      if (!gEvent.id || !gEvent.summary) continue;
-      const googleUpdatedAt = gEvent.updated ? new Date(gEvent.updated) : new Date();
-      const startAt = gEvent.start?.dateTime ?? gEvent.start?.date;
-      const endAt = gEvent.end?.dateTime ?? gEvent.end?.date;
-      if (!startAt) continue;
+      for (const gEvent of googleEvents) {
+        if (!gEvent.id || !gEvent.summary) continue;
+        const googleUpdatedAt = gEvent.updated ? new Date(gEvent.updated) : new Date();
+        const startAt = gEvent.start?.dateTime ?? gEvent.start?.date;
+        const endAt = gEvent.end?.dateTime ?? gEvent.end?.date;
+        if (!startAt) continue;
 
-      const existing = await prisma.event.findFirst({ where: { googleEventId: gEvent.id, userId } });
+        const existing = await prisma.event.findFirst({ where: { googleEventId: gEvent.id, userId } });
 
-      if (existing) {
-        if (googleUpdatedAt > existing.updatedAt) {
-          await prisma.event.update({
-            where: { id: existing.id },
+        if (existing) {
+          if (googleUpdatedAt > existing.updatedAt) {
+            await prisma.event.update({
+              where: { id: existing.id },
+              data: {
+                title: gEvent.summary,
+                startAt: new Date(startAt),
+                endAt: endAt ? new Date(endAt) : null,
+                allDay: !!gEvent.start?.date,
+                googleUpdatedAt,
+                googleCalendarId: calendarId,
+                googleCalendarColor: calendarColor,
+              },
+            });
+            pulled++;
+          }
+        } else {
+          await prisma.event.create({
             data: {
+              userId,
               title: gEvent.summary,
               startAt: new Date(startAt),
               endAt: endAt ? new Date(endAt) : null,
               allDay: !!gEvent.start?.date,
+              color: 'blue',
+              googleEventId: gEvent.id,
               googleUpdatedAt,
               googleCalendarId: calendarId,
               googleCalendarColor: calendarColor,
@@ -129,28 +151,14 @@ export async function syncFromGoogle(visitorId?: string, userId?: string): Promi
           });
           pulled++;
         }
-      } else {
-        await prisma.event.create({
-          data: {
-            userId,
-            title: gEvent.summary,
-            startAt: new Date(startAt),
-            endAt: endAt ? new Date(endAt) : null,
-            allDay: !!gEvent.start?.date,
-            color: 'blue',
-            googleEventId: gEvent.id,
-            googleUpdatedAt,
-            googleCalendarId: calendarId,
-            googleCalendarColor: calendarColor,
-          },
-        });
-        pulled++;
       }
     }
   }
 
-  // 推送本地没有 googleEventId 的事件
-  const localOnly = await prisma.event.findMany({ where: { userId, googleEventId: null } });
+  // 推送阶段：仅 push 或 both 时执行
+  const localOnly = (direction === 'push' || direction === 'both')
+    ? await prisma.event.findMany({ where: { userId, googleEventId: null } })
+    : [];
   let pushed = 0;
 
   for (const event of localOnly) {

@@ -20,6 +20,8 @@ export interface MatchCriteria {
   hasDate?: boolean;
   /** 标题关键词（已剥离时间/指令词），用于匹配 */
   title?: string;
+  /** 跳过 MAX_CANDIDATES 上限，返回所有匹配事件（用于"删除所有X事件"等全量操作） */
+  noCap?: boolean;
 }
 
 export interface MatchResult {
@@ -69,7 +71,8 @@ export function matchEvents(events: CalendarEvent[], criteria: MatchCriteria): M
 
   const ref = (criteria.date ?? new Date()).getTime();
   const sortAll = (list: CalendarEvent[]) => sortByProximity(list, ref);
-  const cap = (list: CalendarEvent[]) => sortAll(list).slice(0, MAX_CANDIDATES);
+  const cap = (list: CalendarEvent[]) =>
+    criteria.noCap ? sortAll(list) : sortAll(list).slice(0, MAX_CANDIDATES);
 
   const kw = criteria.title?.trim();
   const sameDayPool =

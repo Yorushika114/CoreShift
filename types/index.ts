@@ -7,6 +7,8 @@ export type CalendarEvent = {
   reminderAt?: string | null;
   allDay?: boolean;
   recurrence?: string | null; // null | "weekly"
+  recurrenceEndAt?: string | null;
+  recurrenceCount?: number | null;
   color?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -49,4 +51,7 @@ export type ParsedCommand = {
   ambiguities: string[];
   clarificationNeeded: boolean;
   clarificationQuestion?: string;
+  recurrence?: 'daily' | 'weekly' | 'monthly' | null;
+  recurrenceEndAt?: string | null;
+  recurrenceCount?: number | null;
 };
