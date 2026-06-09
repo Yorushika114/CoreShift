@@ -30,11 +30,13 @@ export async function GET(req: NextRequest) {
 
   const rangeStart = new Date(startParam);
   const rangeEnd = new Date(endParam);
+  const now = new Date();
+  const effectiveEnd = rangeEnd < now ? rangeEnd : now;
 
   const [budgets, events] = await Promise.all([
     prisma.timeBudget.findMany({ where: { userId: auth.userId }, orderBy: { createdAt: 'asc' } }),
     prisma.event.findMany({
-      where: { userId: auth.userId, allDay: false, startAt: { gte: rangeStart, lte: rangeEnd } },
+      where: { userId: auth.userId, allDay: false, startAt: { gte: rangeStart, lte: effectiveEnd } },
       select: { title: true, startAt: true, endAt: true },
     }),
   ]);
