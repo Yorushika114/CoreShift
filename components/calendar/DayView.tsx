@@ -6,6 +6,7 @@ import { isToday, toISODateString, formatTimeSlot, getDateStringInTimezone } fro
 import { getHoursInTimezone } from '@/lib/calendar/date-utils';
 import { colorFor } from '@/lib/calendar/color-utils';
 import { useSettings } from '@/contexts/SettingsContext';
+import { AppIcon } from '@/components/ui/AppIcon';
 import type { CalendarEvent } from '@/types';
 
 const SLOT_HEIGHT = 48; // px per 30-min slot
@@ -61,6 +62,19 @@ export function DayView({ date, events, focusTime, onSlotClick, onEventClick }: 
   const timedEvents = events.filter(
     e => !e.allDay && getDateStringInTimezone(new Date(e.startAt), timezone) === dateKey,
   );
+  // 在此日期之前开始、并延续到此日期的跨天事件
+  const continuationEvents = events.filter(e => {
+    if (e.allDay || !e.endAt) return false;
+    const startDay = getDateStringInTimezone(new Date(e.startAt), timezone);
+    const endDay = getDateStringInTimezone(new Date(e.endAt), timezone);
+    if (startDay === dateKey || endDay < dateKey) return false;
+    // ends on or after this day, but started before
+    if (endDay === dateKey) {
+      const { hours, minutes } = getHoursInTimezone(new Date(e.endAt), timezone);
+      return !(hours === 0 && minutes === 0);
+    }
+    return true;
+  });
 
   const showNowLine = isToday(date);
   const [nowTop, setNowTop] = useState<number | null>(null);
@@ -121,8 +135,10 @@ export function DayView({ date, events, focusTime, onSlotClick, onEventClick }: 
           {/* Empty state overlay */}
           {timedEvents.length === 0 && allDayEvents.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-              <div className="text-center px-8 py-6 rounded-2xl bg-white/70 backdrop-blur-sm border border-indigo-100/50 shadow-sm">
-                <div className="text-3xl mb-2">🎙</div>
+              <div className="text-center px-8 py-6 rounded-lg bg-white/80 backdrop-blur-sm border border-slate-200 shadow-sm">
+                <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                  <AppIcon name="mic" className="h-5 w-5" />
+                </div>
                 <p className="text-sm text-gray-500 mb-1">{t('emptyStateHint')}</p>
                 <p className="text-sm text-indigo-500 font-medium">「{t('emptyStateExample')}」</p>
               </div>
@@ -169,6 +185,29 @@ export function DayView({ date, events, focusTime, onSlotClick, onEventClick }: 
 
           {/* Timed event blocks — wrapper offsets the time-label column */}
           <div className="absolute left-20 right-2 top-0 bottom-0 pointer-events-none">
+            {/* Cross-day continuation segments */}
+            {continuationEvents.map(event => {
+              const endDay = getDateStringInTimezone(new Date(event.endAt!), timezone);
+              const isLastSeg = endDay === dateKey;
+              const heightPx = isLastSeg
+                ? Math.max((() => { const { hours: h, minutes: m } = getHoursInTimezone(new Date(event.endAt!), timezone); return (h * 60 + m) / 30 * SLOT_HEIGHT - 1; })(), 24)
+                : 48 * SLOT_HEIGHT - 1;
+              return (
+                <div
+                  key={`cont-${event.id}`}
+                  data-testid={`event-block-cont-${event.id}`}
+                  onClick={e => { e.stopPropagation(); onEventClick?.(event); }}
+                  className={`absolute rounded-md px-2 py-1 pointer-events-auto ${colorFor(event)} text-white overflow-hidden opacity-90 ${onEventClick ? 'cursor-pointer hover:brightness-110' : ''}`}
+                  style={{ top: 0, height: `${heightPx}px`, left: '1px', right: '1px' }}
+                >
+                  <div className="text-xs font-medium truncate leading-tight flex items-center gap-1">
+                    {event.recurrence && <span className="opacity-75 flex-shrink-0">↺</span>}
+                    {event.title}
+                  </div>
+                  <div className="text-xs opacity-80">00:00</div>
+                </div>
+              );
+            })}
             {layoutEvents(timedEvents).map(({ event, col, totalCols }) => {
               const start = new Date(event.startAt);
               const end = event.endAt

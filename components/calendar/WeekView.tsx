@@ -6,6 +6,7 @@ import { isToday, toISODateString, formatTimeSlot, getDateStringInTimezone } fro
 import { getHoursInTimezone } from '@/lib/calendar/date-utils';
 import { colorFor } from '@/lib/calendar/color-utils';
 import { useSettings } from '@/contexts/SettingsContext';
+import { AppIcon } from '@/components/ui/AppIcon';
 import { WEEK_HEADERS_FULL } from '@/lib/i18n';
 import type { CalendarEvent } from '@/types';
 
@@ -69,6 +70,27 @@ export function WeekView({
       const list = map.get(key) ?? [];
       list.push(e);
       map.set(key, list);
+    }
+    return map;
+  }, [events, timezone]);
+
+  // 跨天事件在后续日期的续段映射
+  const continuationsByDate = useMemo(() => {
+    const map = new Map<string, CalendarEvent[]>();
+    for (const e of events) {
+      if (e.allDay || !e.endAt) continue;
+      const startDay = getDateStringInTimezone(new Date(e.startAt), timezone);
+      const endDay = getDateStringInTimezone(new Date(e.endAt), timezone);
+      if (startDay === endDay) continue;
+      let cur = startDay;
+      for (let i = 0; i < 60; i++) {
+        const [y, m, d] = cur.split('-').map(Number);
+        cur = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+        if (cur > endDay) break;
+        const list = map.get(cur) ?? [];
+        list.push(e);
+        map.set(cur, list);
+      }
     }
     return map;
   }, [events, timezone]);
@@ -183,8 +205,10 @@ export function WeekView({
         {/* Empty state overlay */}
         {events.filter(e => !e.allDay).length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-            <div className="text-center px-8 py-6 rounded-2xl bg-white/70 backdrop-blur-sm border border-indigo-100/50 shadow-sm">
-              <div className="text-3xl mb-2">🎙</div>
+            <div className="text-center px-8 py-6 rounded-lg bg-white/80 backdrop-blur-sm border border-slate-200 shadow-sm">
+              <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                <AppIcon name="mic" className="h-5 w-5" />
+              </div>
               <p className="text-sm text-gray-500 mb-1">{t('emptyStateHint')}</p>
               <p className="text-sm text-indigo-500 font-medium">「{t('emptyStateExample')}」</p>
             </div>
@@ -239,6 +263,36 @@ export function WeekView({
                   <div className="border-t-2 border-red-500" />
                 </div>
               )}
+
+              {/* Cross-day continuation segments (events that started on a previous day) */}
+              {(continuationsByDate.get(dateKey) ?? []).filter(e => {
+                if (!e.endAt) return false;
+                const endDay = getDateStringInTimezone(new Date(e.endAt), timezone);
+                if (endDay === dateKey) {
+                  const { hours, minutes } = getHoursInTimezone(new Date(e.endAt), timezone);
+                  return !(hours === 0 && minutes === 0);
+                }
+                return true;
+              }).map(event => {
+                const endDay = getDateStringInTimezone(new Date(event.endAt!), timezone);
+                const isLastSeg = endDay === dateKey;
+                const heightPx = isLastSeg
+                  ? Math.max((() => { const { hours: h, minutes: m } = getHoursInTimezone(new Date(event.endAt!), timezone); return (h * 60 + m) / 30 * SLOT_HEIGHT - 1; })(), 24)
+                  : 48 * SLOT_HEIGHT - 1;
+                return (
+                  <div
+                    key={`cont-${event.id}`}
+                    onClick={e => { e.stopPropagation(); onEventClick?.(event); }}
+                    className={`absolute rounded px-1 py-0.5 ${colorFor(event)} text-white overflow-hidden opacity-90 ${onEventClick ? 'cursor-pointer hover:brightness-110' : ''}`}
+                    style={{ top: 0, height: `${heightPx}px`, left: '1px', right: '1px' }}
+                  >
+                    <div className="text-xs font-medium truncate leading-tight flex items-center gap-0.5">
+                      {event.recurrence && <span className="opacity-75 flex-shrink-0">↺</span>}
+                      {event.title}
+                    </div>
+                  </div>
+                );
+              })}
 
               {/* Timed events */}
               {layoutEvents(timedEvents).map(({ event, col, totalCols }) => {
