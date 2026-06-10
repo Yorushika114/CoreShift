@@ -163,8 +163,9 @@ function CalendarPageInner() {
   }, [googleConnected]);
 
   useEffect(() => {
+    if (!viewReady) return;
     try { localStorage.setItem('cs_view', view); } catch {}
-  }, [view]);
+  }, [view, viewReady]);
 
   useEffect(() => {
     try { localStorage.setItem('cs_viewDate', viewDate.toISOString()); } catch {}
