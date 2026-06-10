@@ -1,11 +1,29 @@
 'use client';
 
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { PcmStreamPlayer } from './pcmPlayer';
 
-export function useTTS() {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+export type TtsConnectionState = 'idle' | 'connecting' | 'speaking' | 'error';
 
-  // 浏览器内置合成（兜底），cancel 后延迟 50ms 避免开头截断
+export interface UseTTSResult {
+  speak: (text: string) => void;
+  speaking: boolean;
+  connectionState: TtsConnectionState;
+}
+
+export function useTTS(): UseTTSResult {
+  const [connectionState, setConnectionState] = useState<TtsConnectionState>('idle');
+  const [speaking, setSpeaking] = useState(false);
+  const playerRef = useRef<PcmStreamPlayer | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+
+  useEffect(() => {
+    return () => {
+      wsRef.current?.close();
+      playerRef.current?.close();
+    };
+  }, []);
+
   const speakLocal = useCallback((text: string) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
@@ -18,37 +36,104 @@ export function useTTS() {
   }, []);
 
   const speak = useCallback((text: string) => {
-    // 明确离线时直接走浏览器合成，跳过网络请求
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       speakLocal(text);
       return;
     }
 
-    fetch('/api/tts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
-    })
-      .then(res => {
-        if (!res.ok) throw new Error('tts api error');
-        return res.blob();
-      })
-      .then(blob => {
-        const url = URL.createObjectURL(blob);
-        if (audioRef.current) {
-          audioRef.current.pause();
-          URL.revokeObjectURL(audioRef.current.src);
-        }
-        const audio = new Audio(url);
-        audioRef.current = audio;
-        audio.onended = () => URL.revokeObjectURL(url);
-        audio.play().catch(() => speakLocal(text));
-      })
-      .catch(() => {
-        // 网络错误 / API 不可用 → 降级
+    let retried = false;
+
+    function tryXunfei() {
+      setConnectionState('connecting');
+      setSpeaking(true);
+
+      fetch('/api/xunfei/tts-url')
+        .then(res => {
+          if (!res.ok) throw new Error('url fetch failed');
+          return res.json() as Promise<{ url: string; appId: string }>;
+        })
+        .then(({ url, appId }) => {
+          wsRef.current?.close();
+
+          if (!playerRef.current) {
+            playerRef.current = new PcmStreamPlayer(16000);
+          }
+          const player = playerRef.current;
+          player.resume();
+          player.reset();
+
+          const ws = new WebSocket(url);
+          wsRef.current = ws;
+
+          ws.onopen = () => {
+            setConnectionState('speaking');
+            // UTF-8 文字 → base64（兼容中文）
+            const bytes = new TextEncoder().encode(text);
+            const binStr = Array.from(bytes).map(b => String.fromCharCode(b)).join('');
+            ws.send(JSON.stringify({
+              common: { app_id: appId },
+              business: {
+                aue: 'raw',
+                auf: 'audio/L16;rate=16000',
+                vcn: 'xiaoyan',
+                tte: 'utf8',
+                speed: 50,
+                volume: 50,
+                pitch: 50,
+              },
+              data: { status: 2, text: btoa(binStr) },
+            }));
+          };
+
+          ws.onmessage = (event) => {
+            if (typeof event.data !== 'string') return;
+            const frame = JSON.parse(event.data) as {
+              code: number;
+              data?: { audio?: string; status?: number };
+            };
+            if (frame.code !== 0) {
+              ws.close();
+              onFail();
+              return;
+            }
+            if (frame.data?.audio) {
+              const binary = Uint8Array.from(atob(frame.data.audio), c => c.charCodeAt(0));
+              player.feed(binary.buffer);
+            }
+            if (frame.data?.status === 2) {
+              setConnectionState('idle');
+              setSpeaking(false);
+              ws.close();
+            }
+          };
+
+          ws.onerror = () => {
+            setConnectionState('error');
+            setSpeaking(false);
+            onFail();
+          };
+
+          ws.onclose = () => {
+            setConnectionState(prev => (prev === 'speaking' ? 'idle' : prev));
+            setSpeaking(false);
+          };
+        })
+        .catch(onFail);
+    }
+
+    function onFail() {
+      if (!retried) {
+        retried = true;
+        setTimeout(tryXunfei, 500);
+      } else {
+        setConnectionState('idle');
+        setSpeaking(false);
         speakLocal(text);
-      });
+      }
+    }
+
+    tryXunfei();
   }, [speakLocal]);
 
-  return { speak };
+  return { speak, speaking, connectionState };
 }
