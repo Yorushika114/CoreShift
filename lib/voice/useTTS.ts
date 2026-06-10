@@ -16,11 +16,14 @@ export function useTTS(): UseTTSResult {
   const [speaking, setSpeaking] = useState(false);
   const playerRef = useRef<PcmStreamPlayer | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const activeWsRef = useRef<WebSocket | null>(null);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     return () => {
       wsRef.current?.close();
       playerRef.current?.close();
+      playerRef.current = null; // 防止 AudioContext 关闭后被复用导致静默
     };
   }, []);
 
@@ -36,6 +39,12 @@ export function useTTS(): UseTTSResult {
   }, []);
 
   const speak = useCallback((text: string) => {
+    // 取消上一次的重试定时器，防止旧重试覆盖新请求
+    if (retryTimerRef.current !== null) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       speakLocal(text);
       return;
@@ -46,6 +55,7 @@ export function useTTS(): UseTTSResult {
     function tryXunfei() {
       setConnectionState('connecting');
       setSpeaking(true);
+      wsRef.current?.close();
 
       fetch('/api/xunfei/tts-url')
         .then(res => {
@@ -53,8 +63,6 @@ export function useTTS(): UseTTSResult {
           return res.json() as Promise<{ url: string; appId: string }>;
         })
         .then(({ url, appId }) => {
-          wsRef.current?.close();
-
           if (!playerRef.current) {
             playerRef.current = new PcmStreamPlayer(16000);
           }
@@ -64,6 +72,7 @@ export function useTTS(): UseTTSResult {
 
           const ws = new WebSocket(url);
           wsRef.current = ws;
+          activeWsRef.current = ws; // 记录当前活跃连接
 
           ws.onopen = () => {
             setConnectionState('speaking');
@@ -109,13 +118,17 @@ export function useTTS(): UseTTSResult {
 
           ws.onerror = () => {
             setConnectionState('error');
-            setSpeaking(false);
+            // 不在这里 setSpeaking(false)，交给 onFail/onclose 处理
             onFail();
           };
 
           ws.onclose = () => {
-            setConnectionState(prev => (prev === 'speaking' ? 'idle' : prev));
-            setSpeaking(false);
+            // 仅在关闭的是当前活跃连接时才重置状态，防止旧连接的 onclose 覆盖重试状态
+            if (activeWsRef.current === ws) {
+              setConnectionState(prev => (prev === 'speaking' ? 'idle' : prev));
+              setSpeaking(false);
+              activeWsRef.current = null;
+            }
           };
         })
         .catch(onFail);
@@ -124,7 +137,10 @@ export function useTTS(): UseTTSResult {
     function onFail() {
       if (!retried) {
         retried = true;
-        setTimeout(tryXunfei, 500);
+        retryTimerRef.current = setTimeout(() => {
+          retryTimerRef.current = null;
+          tryXunfei();
+        }, 500);
       } else {
         setConnectionState('idle');
         setSpeaking(false);
