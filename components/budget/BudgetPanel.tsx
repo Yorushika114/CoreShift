@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useSettings } from '@/contexts/SettingsContext';
+import { AppIcon } from '@/components/ui/AppIcon';
 import type { BudgetProgress } from '@/types';
 
 export function getWeekRange(): { start: string; end: string } {
@@ -60,36 +61,35 @@ export function BudgetPanel({ onEdit }: { onEdit: () => void }) {
 
   return (
     <>
-      <div className="border border-gray-200 rounded-lg overflow-hidden text-sm">
+      <div className="border border-slate-200 rounded-lg overflow-hidden text-sm bg-white">
         {/* Header */}
         <div
-          className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-100 cursor-pointer select-none hover:bg-gray-100 transition"
+          className="flex items-center justify-between px-3 py-2 bg-slate-50 border-b border-slate-100 cursor-pointer select-none hover:bg-slate-100 transition"
           onClick={() => setCollapsed(v => !v)}
         >
-          <span className="flex items-center gap-1.5 text-gray-700 font-medium text-xs flex-1">
-            <span>🎯</span>
+          <span className="flex items-center gap-1.5 text-slate-700 font-medium text-xs flex-1">
+            <AppIcon name="target" className="h-4 w-4 text-slate-500" />
             {t('budgetTitle')}
           </span>
-          <span
-            className="text-gray-400 text-xs transition-transform duration-200 flex-shrink-0"
+          <AppIcon
+            name="chevron-down"
+            className="h-3.5 w-3.5 text-slate-400 transition-transform duration-200 flex-shrink-0"
             style={{ display: 'inline-block', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}
-          >
-            ▾
-          </span>
+          />
           <div className="flex items-center gap-1 ml-1" onClick={e => e.stopPropagation()}>
             <button
               onClick={loadProgress}
-              className="text-gray-400 hover:text-gray-600 transition px-1 text-xs"
+              className="text-slate-400 hover:text-slate-600 transition p-1"
               title={language === 'en' ? 'Refresh' : '刷新'}
             >
-              ↻
+              <AppIcon name="refresh" className="h-3.5 w-3.5" />
             </button>
             <button
               onClick={onEdit}
-              className="text-gray-400 hover:text-gray-600 transition px-1 text-xs"
+              className="text-slate-400 hover:text-slate-600 transition p-1"
               title={language === 'en' ? 'Manage goals' : '管理目标'}
             >
-              ✏
+              <AppIcon name="edit" className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>

@@ -11,9 +11,11 @@ import { DayPickerPopup } from '@/components/calendar/DayPickerPopup';
 import { WeekView } from '@/components/calendar/WeekView';
 import { DayView } from '@/components/calendar/DayView';
 import { EventEditorPanel } from '@/components/voice/EventEditorPanel';
+import { MobileVoiceFab } from '@/components/voice/MobileVoiceFab';
 import { VoiceCommandOverlay } from '@/components/voice/VoiceCommandOverlay';
 import { SettingsPanel } from '@/components/settings/SettingsPanel';
 import { BudgetPanel } from '@/components/budget/BudgetPanel';
+import { AppIcon } from '@/components/ui/AppIcon';
 import { BudgetEditModal } from '@/components/budget/BudgetEditModal';
 import { SettingsProvider, useSettings } from '@/contexts/SettingsContext';
 import { WEEK_HEADERS_FULL } from '@/lib/i18n';
@@ -31,6 +33,15 @@ type UndoAction =
   | { type: 'edit'; before: CalendarEvent; after: CalendarEvent };
 
 const VIEW_TAB_VALUES: ViewMode[] = ['year', 'month', 'week', 'day'];
+
+function readStoredCount(key: string): number {
+  try {
+    const value = Number(localStorage.getItem(key) ?? '0');
+    return Number.isFinite(value) ? value : 0;
+  } catch {
+    return 0;
+  }
+}
 
 interface EditorState {
   open: boolean;
@@ -60,6 +71,7 @@ function CalendarPageInner() {
   const [focusTime, setFocusTime] = useState<Date | null>(null);
   const [reminderToasts, setReminderToasts] = useState<{ id: string; title: string; timeStr: string }[]>([]);
   const [budgetEditOpen, setBudgetEditOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [googleConnected, setGoogleConnected] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
@@ -67,10 +79,59 @@ function CalendarPageInner() {
   const [undoToast, setUndoToast] = useState<string | null>(null);
   const [voiceDirectProcess, setVoiceDirectProcess] = useState(false);
   const [isSpaceListening, setIsSpaceListening] = useState(false);
+  const [hasUsedSpaceShortcut, setHasUsedSpaceShortcut] = useState(() => {
+    try { return localStorage.getItem('cs_voice_space_used') === 'true'; } catch { return false; }
+  });
+  const [voiceButtonClicksWithoutSpace, setVoiceButtonClicksWithoutSpace] = useState(() => {
+    return readStoredCount('cs_voice_button_clicks_without_space');
+  });
+  const [voiceShortcutToastCount, setVoiceShortcutToastCount] = useState(() => {
+    return readStoredCount('cs_voice_shortcut_toast_count');
+  });
+  const [voiceShortcutToast, setVoiceShortcutToast] = useState(false);
   const isSpaceListeningRef = useRef(false);
   const voiceOpenRef = useRef(false);
   const spaceHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const spaceRecognizedRef = useRef('');
+  const voiceShortcutToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showVoiceShortcutToast() {
+    setVoiceShortcutToast(true);
+    if (voiceShortcutToastTimerRef.current) {
+      clearTimeout(voiceShortcutToastTimerRef.current);
+    }
+    voiceShortcutToastTimerRef.current = setTimeout(() => {
+      setVoiceShortcutToast(false);
+      voiceShortcutToastTimerRef.current = null;
+    }, 2600);
+  }
+
+  function markSpaceShortcutUsed() {
+    if (!hasUsedSpaceShortcut) setHasUsedSpaceShortcut(true);
+    setVoiceButtonClicksWithoutSpace(0);
+    try {
+      localStorage.setItem('cs_voice_space_used', 'true');
+      localStorage.setItem('cs_voice_button_clicks_without_space', '0');
+    } catch {}
+  }
+
+  function registerVoiceButtonOpen() {
+    if (hasUsedSpaceShortcut) return;
+    const nextClicks = voiceButtonClicksWithoutSpace + 1;
+    setVoiceButtonClicksWithoutSpace(nextClicks);
+    try { localStorage.setItem('cs_voice_button_clicks_without_space', String(nextClicks)); } catch {}
+
+    if (nextClicks >= 8 && voiceShortcutToastCount < 2) {
+      const nextToastCount = voiceShortcutToastCount + 1;
+      setVoiceShortcutToastCount(nextToastCount);
+      setVoiceButtonClicksWithoutSpace(0);
+      try {
+        localStorage.setItem('cs_voice_shortcut_toast_count', String(nextToastCount));
+        localStorage.setItem('cs_voice_button_clicks_without_space', '0');
+      } catch {}
+      showVoiceShortcutToast();
+    }
+  }
 
   useEffect(() => {
     fetch('/api/auth/status').then(r => r.json()).then(d => {
@@ -80,6 +141,12 @@ function CalendarPageInner() {
         fetch('/api/sync', { method: 'POST' }).catch(() => {});
       }
     });
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (voiceShortcutToastTimerRef.current) clearTimeout(voiceShortcutToastTimerRef.current);
+    };
   }, []);
 
   // 每 5 分钟后台静默同步，保持 Google 日历事项最新
@@ -415,6 +482,16 @@ function CalendarPageInner() {
     return formatDayTitle(viewDate);
   }
 
+  function getMobileNavTitle(): string {
+    if (language === 'en') {
+      const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      if (view === 'year') return `${viewDate.getFullYear()}`;
+      return `${MONTHS_EN[viewDate.getMonth()]} ${viewDate.getFullYear()}`;
+    }
+    if (view === 'year') return `${viewDate.getFullYear()}${t('yearSuffix')}`;
+    return `${viewDate.getMonth() + 1}月`;
+  }
+
   const prevLabel = view === 'year' ? t('prevYear') : view === 'month' ? t('prevMonth') : view === 'week' ? t('prevWeek') : t('prevDay');
   const nextLabel = view === 'year' ? t('nextYear') : view === 'month' ? t('nextMonth') : view === 'week' ? t('nextWeek') : t('nextDay');
 
@@ -451,6 +528,7 @@ function CalendarPageInner() {
         spaceStopRef.current();
         isSpaceListeningRef.current = false;
         setIsSpaceListening(false);
+        markSpaceShortcutUsed();
         const text = spaceRecognizedRef.current;
         if (text) {
           setVoiceDraft(text);
@@ -472,28 +550,35 @@ function CalendarPageInner() {
     setVoiceOpen(true);
   }
 
+  function handleVoiceButtonOpen() {
+    registerVoiceButtonOpen();
+    openVoiceWithDraft();
+  }
+
   return (
-    <div className="flex h-screen font-sans" style={{ background: 'linear-gradient(135deg, #eef2ff 0%, #f5f3ff 40%, #fdf4ff 100%)' }}>
+    <div className="flex h-screen font-sans" style={{ background: 'linear-gradient(135deg, #eef4fb 0%, #f7f9fc 48%, #ffffff 100%)' }}>
       {/* Left Sidebar */}
-      <aside className="hidden md:flex w-64 border-r border-indigo-100/60 bg-white/80 backdrop-blur-sm flex-col flex-shrink-0 overflow-hidden">
+      <aside className="hidden md:flex w-64 border-r border-slate-200/80 bg-[#f7f9fc]/90 backdrop-blur-sm flex-col flex-shrink-0 overflow-hidden">
         <div className="flex flex-col gap-3 p-4 pb-2">
           <div className="flex items-center gap-2">
-            <span className="text-2xl">🗓</span>
-            <span className="text-lg font-medium text-gray-700">CoreShift</span>
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white shadow-sm">
+              <AppIcon name="calendar" className="h-[18px] w-[18px]" />
+            </span>
+            <span className="text-lg font-medium text-slate-800">CoreShift</span>
           </div>
 
           <div className="flex items-center gap-2">
             <button
               onClick={goToToday}
-              className="text-sm border border-neutral-200 rounded-full px-4 py-1.5 hover:bg-neutral-50 text-neutral-600 transition-colors"
+              className="text-sm border border-slate-200 rounded-lg px-4 py-1.5 hover:bg-white text-slate-600 transition-colors"
             >
               {t('today')}
             </button>
             <button
               onClick={() => openCreateEditor()}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-white bg-indigo-500 hover:bg-indigo-600 rounded-full transition shadow-sm shadow-indigo-200"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition shadow-sm"
             >
-              <span className="text-base leading-none">+</span>
+              <AppIcon name="plus" className="h-4 w-4" />
               {t('newBtn')}
             </button>
           </div>
@@ -515,12 +600,15 @@ function CalendarPageInner() {
 
         <div className="px-4 pb-4 pt-2 flex flex-col gap-3">
           <button
-            onClick={() => openVoiceWithDraft()}
-            className="flex items-center gap-2 w-full bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white rounded-xl px-4 py-2.5 shadow-sm shadow-indigo-200 transition-all text-sm font-medium"
+            onClick={handleVoiceButtonOpen}
+            className="flex items-center gap-2 w-full bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white rounded-lg px-4 py-2.5 shadow-sm transition-all text-sm font-medium"
           >
-            <span className="text-base">🎙</span>
+            <AppIcon name="mic" className="h-[18px] w-[18px]" />
             <span>{t('voiceInputFab')}</span>
           </button>
+          {!hasUsedSpaceShortcut && voiceShortcutToastCount === 0 && (
+            <p className="-mt-1 px-1 text-xs text-slate-400">{t('voiceQuickHint')}</p>
+          )}
           <SettingsPanel
             googleConnected={googleConnected}
             syncing={syncing}
@@ -533,34 +621,130 @@ function CalendarPageInner() {
 
       {/* Main Area */}
       <main
-        className="flex-1 flex flex-col overflow-hidden pb-16 md:pb-4"
+        className="flex-1 flex flex-col overflow-hidden pb-20 md:pb-4"
         style={
           bgType !== 'none' && bgValue
             ? { backgroundImage: `url(${bgValue})`, backgroundSize: 'cover', backgroundPosition: 'center' }
             : undefined
         }
       >
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-200 flex-shrink-0 bg-white/90 backdrop-blur-sm">
+        <div className="md:hidden flex-shrink-0 border-b border-slate-200 bg-white/95 backdrop-blur-sm">
+          <div className="flex h-16 items-center gap-2 px-3">
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(true)}
+              className="flex h-11 w-11 items-center justify-center rounded-full text-slate-700 active:bg-slate-100"
+              aria-label={language === 'zh' ? '打开菜单' : 'Open menu'}
+            >
+              <AppIcon name="list" className="h-6 w-6" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowYearPicker(v => !v)}
+              className="inline-flex min-w-0 flex-1 items-center gap-1 text-left text-2xl font-medium text-slate-900"
+            >
+              <span className="truncate">{getMobileNavTitle()}</span>
+              <AppIcon name="chevron-down" className="h-4 w-4 flex-shrink-0 text-slate-500" />
+            </button>
+            {loading && (
+              <span className="text-xs text-gray-400 animate-pulse">{t('loading')}</span>
+            )}
+            <button
+              type="button"
+              onClick={goToToday}
+              className="flex h-11 w-11 items-center justify-center rounded-full text-slate-700 active:bg-slate-100"
+              aria-label={t('today')}
+            >
+              <span className="relative flex h-6 w-6 items-center justify-center rounded-md border-2 border-slate-600 text-[11px] font-semibold leading-none">
+                {new Date().getDate()}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => openCreateEditor()}
+              className="flex h-11 w-11 items-center justify-center rounded-full text-slate-700 active:bg-slate-100"
+              aria-label={t('newBtn')}
+            >
+              <AppIcon name="plus" className="h-6 w-6" />
+            </button>
+          </div>
+          <div className="flex items-center gap-2 overflow-x-auto px-3 pb-2">
+            <button
+              onClick={goPrev}
+              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-slate-500 active:bg-slate-100"
+              aria-label={prevLabel}
+            >
+              <AppIcon name="chevron-left" className="h-5 w-5" />
+            </button>
+            <button
+              onClick={goNext}
+              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-slate-500 active:bg-slate-100"
+              aria-label={nextLabel}
+            >
+              <AppIcon name="chevron-right" className="h-5 w-5" />
+            </button>
+            {VIEW_TAB_VALUES.filter(v => v !== 'year').map(v => (
+              <button
+                key={v}
+                onClick={() => { setView(v); setShowYearPicker(false); }}
+                className={`h-9 flex-shrink-0 rounded-full px-4 text-sm transition-colors ${
+                  view === v
+                    ? 'bg-blue-100 text-blue-700 font-medium'
+                    : 'text-slate-600 active:bg-slate-100'
+                }`}
+              >
+                {t(v as 'month' | 'week' | 'day')}
+              </button>
+            ))}
+          </div>
+          <div className="relative px-3">
+            {showYearPicker && view === 'year' && (
+              <YearPickerPopup
+                currentYear={viewDate.getFullYear()}
+                onSelect={year => setViewDate(new Date(year, 0, 1))}
+                onClose={() => setShowYearPicker(false)}
+              />
+            )}
+            {showYearPicker && (view === 'month' || view === 'week') && (
+              <MonthPickerPopup
+                currentYear={viewDate.getFullYear()}
+                currentMonth={viewDate.getMonth()}
+                onSelect={(year, month) => setViewDate(new Date(year, month, 1))}
+                onClose={() => setShowYearPicker(false)}
+              />
+            )}
+            {showYearPicker && view === 'day' && (
+              <DayPickerPopup
+                currentDate={viewDate}
+                onSelect={date => setViewDate(date)}
+                onClose={() => setShowYearPicker(false)}
+              />
+            )}
+          </div>
+        </div>
+
+        <div className="hidden md:flex items-center gap-2 px-4 py-2 border-b border-slate-200 flex-shrink-0 bg-white/95 backdrop-blur-sm">
           <button
             onClick={goPrev}
-            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500"
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"
             aria-label={prevLabel}
           >
-            ‹
+            <AppIcon name="chevron-left" className="h-[18px] w-[18px]" />
           </button>
           <button
             onClick={goNext}
-            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500"
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"
             aria-label={nextLabel}
           >
-            ›
+            <AppIcon name="chevron-right" className="h-[18px] w-[18px]" />
           </button>
           <div className="relative flex-1 ml-1">
             <button
               onClick={() => setShowYearPicker(v => !v)}
-              className="text-base font-normal text-gray-700 hover:text-blue-600 cursor-pointer"
+              className="inline-flex items-center gap-1 text-base font-medium text-slate-800 hover:text-blue-600 cursor-pointer"
             >
               {getNavTitle()}
+              <AppIcon name="chevron-down" className="h-3.5 w-3.5 text-slate-400" />
             </button>
             {showYearPicker && view === 'year' && (
               <YearPickerPopup
@@ -598,17 +782,17 @@ function CalendarPageInner() {
           )}
 
           {/* View tabs */}
-          <div className="flex border border-gray-200 rounded-lg overflow-hidden">
+          <div className="flex border border-slate-200 rounded-lg overflow-hidden bg-white">
             {VIEW_TAB_VALUES.map(v => (
               <button
                 key={v}
                 onClick={() => { setView(v); setShowYearPicker(false); }}
-                className={`px-2 md:px-3 py-1 text-xs md:text-sm transition-colors ${
+                className={`min-w-12 px-2 md:px-3 py-1 text-xs md:text-sm transition-colors ${
                   v === 'year' ? 'hidden md:block' : ''
                 } ${
                   view === v
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-600 hover:bg-gray-100'
+                    ? 'bg-blue-50 text-blue-600 font-medium'
+                    : 'text-slate-600 hover:bg-slate-50'
                 }`}
               >
                 {t(v as 'year' | 'month' | 'week' | 'day')}
@@ -654,6 +838,66 @@ function CalendarPageInner() {
         )}
       </main>
 
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-[120] md:hidden">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/30"
+            aria-label={language === 'zh' ? '关闭菜单' : 'Close menu'}
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          <aside className="absolute left-0 top-0 flex h-full w-[82vw] max-w-xs flex-col overflow-y-auto bg-white shadow-2xl">
+            <div className="flex items-center gap-3 px-5 py-6">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white">
+                <AppIcon name="calendar" className="h-5 w-5" />
+              </span>
+              <span className="text-xl font-medium text-slate-800">CoreShift</span>
+            </div>
+            <div className="px-3 pb-3">
+              {VIEW_TAB_VALUES.map(v => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => {
+                    setView(v);
+                    setShowYearPicker(false);
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`flex h-12 w-full items-center gap-4 rounded-r-full px-4 text-left text-base transition ${
+                    view === v ? 'bg-blue-100 text-blue-800 font-medium' : 'text-slate-700 active:bg-slate-100'
+                  }`}
+                >
+                  <AppIcon name={v === 'year' || v === 'month' ? 'calendar' : 'list'} className="h-5 w-5" />
+                  <span>{t(v as 'year' | 'month' | 'week' | 'day')}</span>
+                </button>
+              ))}
+            </div>
+            <div className="border-t border-slate-200 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => {
+                  goToToday();
+                  setMobileMenuOpen(false);
+                }}
+                className="flex h-11 w-full items-center gap-3 rounded-lg text-left text-slate-700 active:bg-slate-100"
+              >
+                <AppIcon name="calendar" className="h-5 w-5" />
+                <span>{t('today')}</span>
+              </button>
+            </div>
+            <div className="mt-auto border-t border-slate-200 px-4 py-4">
+              <SettingsPanel
+                googleConnected={googleConnected}
+                syncing={syncing}
+                syncMsg={syncMsg}
+                onSync={handleSync}
+                onDisconnect={handleDisconnect}
+              />
+            </div>
+          </aside>
+        </div>
+      )}
+
       {budgetEditOpen && (
         <BudgetEditModal
           onClose={() => { setBudgetEditOpen(false); }}
@@ -688,40 +932,25 @@ function CalendarPageInner() {
       )}
 
       {isSpaceListening && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[110] bg-indigo-600 text-white text-xs px-4 py-2 rounded-full shadow-lg animate-pulse pointer-events-none">
-          🎙 {language === 'zh' ? '正在聆听…松开 Space 完成' : 'Listening… release Space to finish'}
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[110] flex items-center gap-2 bg-blue-600 text-white text-xs px-4 py-2 rounded-lg shadow-lg animate-pulse pointer-events-none">
+          <AppIcon name="mic" className="h-4 w-4" />
+          {language === 'zh' ? '正在聆听…松开 Space 完成' : 'Listening… release Space to finish'}
         </div>
       )}
 
-      {/* 移动端底部 Action Bar（md 以上隐藏，FAB 替代） */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-[90] bg-white/95 backdrop-blur-sm border-t border-gray-200 flex items-center justify-around px-4 py-2">
-        <button
-          onClick={goToToday}
-          className="flex flex-col items-center gap-0.5 px-4 py-1.5 text-gray-600 hover:text-indigo-600 transition"
-        >
-          <span className="text-lg">📅</span>
-          <span className="text-xs">{t('today')}</span>
-        </button>
-        <button
-          onClick={() => openVoiceWithDraft()}
-          className="flex flex-col items-center gap-0.5 px-5 py-2 bg-indigo-500 text-white rounded-2xl hover:bg-indigo-600 active:scale-95 transition shadow-sm shadow-indigo-200"
-        >
-          <span className="text-lg">🎙</span>
-          <span className="text-xs font-medium">{t('voiceInputFab')}</span>
-        </button>
-        <button
-          onClick={() => openCreateEditor()}
-          className="flex flex-col items-center gap-0.5 px-4 py-1.5 text-gray-600 hover:text-indigo-600 transition"
-        >
-          <span className="text-lg font-light">＋</span>
-          <span className="text-xs">{t('newBtn')}</span>
-        </button>
-      </div>
+      {voiceShortcutToast && !hasUsedSpaceShortcut && (
+        <div className="fixed bottom-20 left-1/2 z-[110] flex -translate-x-1/2 items-center gap-2 rounded-lg border border-blue-100 bg-white px-3 py-2 text-xs text-slate-600 shadow-lg md:bottom-24 md:left-4 md:translate-x-0">
+          <AppIcon name="mic" className="h-4 w-4 text-blue-600" />
+          <span>{t('voiceShortcutToast')}</span>
+        </div>
+      )}
+
+      <MobileVoiceFab label={t('voiceInputFab')} onClick={handleVoiceButtonOpen} />
 
       {/* Undo toast */}
       {undoToast && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[110] flex items-center gap-3 bg-gray-800 text-white text-sm px-4 py-2.5 rounded-full shadow-lg animate-fade-in">
-          <span>✓</span>
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[110] flex items-center gap-3 bg-slate-900 text-white text-sm px-4 py-2.5 rounded-lg shadow-lg animate-fade-in">
+          <AppIcon name="check" className="h-4 w-4" />
           <span>{undoToast}</span>
           <button
             onClick={() => handleUndoRef.current()}
@@ -737,9 +966,11 @@ function CalendarPageInner() {
         {reminderToasts.map(toast => (
           <div
             key={toast.id}
-            className="flex items-start gap-3 bg-white border border-blue-200 shadow-lg rounded-xl px-4 py-3 w-72 animate-fade-in"
+            className="flex items-start gap-3 bg-white border border-blue-200 shadow-lg rounded-lg px-4 py-3 w-72 animate-fade-in"
           >
-            <span className="text-xl">🔔</span>
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+              <AppIcon name="bell" className="h-4 w-4" />
+            </span>
             <div>
               <p className="text-sm font-medium text-gray-800">{toast.title}</p>
               <p className="text-xs text-gray-500 mt-0.5">{t('eventStartPrefix')} {toast.timeStr} {t('eventStartSuffix')}</p>
