@@ -35,6 +35,7 @@ type UndoAction =
 const VIEW_TAB_VALUES: ViewMode[] = ['year', 'month', 'week', 'day'];
 
 function readStoredCount(key: string): number {
+  if (typeof window === 'undefined') return 0;
   try {
     const value = Number(localStorage.getItem(key) ?? '0');
     return Number.isFinite(value) ? value : 0;
@@ -52,15 +53,9 @@ interface EditorState {
 
 function CalendarPageInner() {
   const { bgType, bgValue, t, language } = useSettings();
-  const [view, setView] = useState<ViewMode>(() => {
-    try { return (localStorage.getItem('cs_view') as ViewMode) ?? 'week'; } catch { return 'week'; }
-  });
-  const [selectedDate, setSelectedDate] = useState(() => {
-    try { const s = localStorage.getItem('cs_viewDate'); return s ? new Date(s) : new Date(); } catch { return new Date(); }
-  });
-  const [viewDate, setViewDate] = useState(() => {
-    try { const s = localStorage.getItem('cs_viewDate'); return s ? new Date(s) : new Date(); } catch { return new Date(); }
-  });
+  const [view, setView] = useState<ViewMode>('week');
+  const [selectedDate, setSelectedDate] = useState(() => new Date());
+  const [viewDate, setViewDate] = useState(() => new Date());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [showYearPicker, setShowYearPicker] = useState(false);
@@ -79,15 +74,9 @@ function CalendarPageInner() {
   const [undoToast, setUndoToast] = useState<string | null>(null);
   const [voiceDirectProcess, setVoiceDirectProcess] = useState(false);
   const [isSpaceListening, setIsSpaceListening] = useState(false);
-  const [hasUsedSpaceShortcut, setHasUsedSpaceShortcut] = useState(() => {
-    try { return localStorage.getItem('cs_voice_space_used') === 'true'; } catch { return false; }
-  });
-  const [voiceButtonClicksWithoutSpace, setVoiceButtonClicksWithoutSpace] = useState(() => {
-    return readStoredCount('cs_voice_button_clicks_without_space');
-  });
-  const [voiceShortcutToastCount, setVoiceShortcutToastCount] = useState(() => {
-    return readStoredCount('cs_voice_shortcut_toast_count');
-  });
+  const [hasUsedSpaceShortcut, setHasUsedSpaceShortcut] = useState(false);
+  const [voiceButtonClicksWithoutSpace, setVoiceButtonClicksWithoutSpace] = useState(0);
+  const [voiceShortcutToastCount, setVoiceShortcutToastCount] = useState(0);
   const [voiceShortcutToast, setVoiceShortcutToast] = useState(false);
   const isSpaceListeningRef = useRef(false);
   const voiceOpenRef = useRef(false);
@@ -132,6 +121,18 @@ function CalendarPageInner() {
       showVoiceShortcutToast();
     }
   }
+
+  useEffect(() => {
+    try {
+      const savedView = localStorage.getItem('cs_view') as ViewMode;
+      if (savedView && VIEW_TAB_VALUES.includes(savedView)) setView(savedView);
+      const savedDate = localStorage.getItem('cs_viewDate');
+      if (savedDate) { const d = new Date(savedDate); setViewDate(d); setSelectedDate(d); }
+      setHasUsedSpaceShortcut(localStorage.getItem('cs_voice_space_used') === 'true');
+      setVoiceButtonClicksWithoutSpace(readStoredCount('cs_voice_button_clicks_without_space'));
+      setVoiceShortcutToastCount(readStoredCount('cs_voice_shortcut_toast_count'));
+    } catch {}
+  }, []);
 
   useEffect(() => {
     fetch('/api/auth/status').then(r => r.json()).then(d => {
@@ -626,7 +627,7 @@ function CalendarPageInner() {
 
       {/* Main Area */}
       <main
-        className="flex-1 flex flex-col overflow-hidden pb-20 md:pb-4"
+        className="flex-1 flex flex-col overflow-hidden pb-20 md:pb-0"
         style={
           bgType !== 'none' && bgValue
             ? { backgroundImage: `url(${bgValue})`, backgroundSize: 'cover', backgroundPosition: 'center' }
@@ -806,41 +807,43 @@ function CalendarPageInner() {
           </div>
         </div>
 
-        {view === 'year' && (
-          <YearGrid
-            year={viewDate.getFullYear()}
-            events={expandedEvents}
-            onMonthClick={handleMonthClick}
-            onNextYear={goNext}
-            onPrevYear={goPrev}
-          />
-        )}
-        {view === 'month' && (
-          <MonthGrid
-            viewDate={viewDate}
-            events={expandedEvents}
-            onDateClick={handleDayClick}
-          />
-        )}
-        {view === 'week' && (
-          <WeekView
-            startDate={getWeekStart(viewDate)}
-            events={expandedEvents}
-            focusTime={focusTime}
-            onDayClick={handleDayClick}
-            onSlotClick={openCreateEditor}
-            onEventClick={openEditEditor}
-          />
-        )}
-        {view === 'day' && (
-          <DayView
-            date={viewDate}
-            events={expandedEvents}
-            focusTime={focusTime}
-            onSlotClick={openCreateEditor}
-            onEventClick={openEditEditor}
-          />
-        )}
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+          {view === 'year' && (
+            <YearGrid
+              year={viewDate.getFullYear()}
+              events={expandedEvents}
+              onMonthClick={handleMonthClick}
+              onNextYear={goNext}
+              onPrevYear={goPrev}
+            />
+          )}
+          {view === 'month' && (
+            <MonthGrid
+              viewDate={viewDate}
+              events={expandedEvents}
+              onDateClick={handleDayClick}
+            />
+          )}
+          {view === 'week' && (
+            <WeekView
+              startDate={getWeekStart(viewDate)}
+              events={expandedEvents}
+              focusTime={focusTime}
+              onDayClick={handleDayClick}
+              onSlotClick={openCreateEditor}
+              onEventClick={openEditEditor}
+            />
+          )}
+          {view === 'day' && (
+            <DayView
+              date={viewDate}
+              events={expandedEvents}
+              focusTime={focusTime}
+              onSlotClick={openCreateEditor}
+              onEventClick={openEditEditor}
+            />
+          )}
+        </div>
       </main>
 
       {mobileMenuOpen && (
