@@ -191,7 +191,7 @@ export function useSpeechRecognition(
               if (!frame.data?.result?.ws) return;
               const full = applyResult(frame.data.result);
               setInterimText(full);
-              if (frame.data.status === 2) {
+              if (frame.data.result.ls) {
                 onResultRef.current?.(full.trim());
               }
             }
