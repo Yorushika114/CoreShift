@@ -6,7 +6,6 @@ import { isToday, toISODateString, formatTimeSlot, getDateStringInTimezone } fro
 import { getHoursInTimezone } from '@/lib/calendar/date-utils';
 import { colorFor } from '@/lib/calendar/color-utils';
 import { useSettings } from '@/contexts/SettingsContext';
-import { AppIcon } from '@/components/ui/AppIcon';
 import { WEEK_HEADERS_FULL } from '@/lib/i18n';
 import type { CalendarEvent } from '@/types';
 
@@ -143,11 +142,11 @@ export function WeekView({
   }
 
   return (
-    <div ref={scrollRef} className="flex-1 overflow-y-auto bg-white/70">
+    <div ref={scrollRef} className="flex-1 overflow-y-auto bg-white/80">
       {/* Sticky header: day names + optional all-day row */}
-      <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-sm border-b border-indigo-100/50">
+      <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-sm border-b border-blue-200/80">
         <div className="flex">
-          <div className="w-20 flex-shrink-0" />
+          <div className="w-14 flex-shrink-0 sm:w-16 md:w-20" />
           {days.map((day, i) => {
             const today = isToday(day);
             const isWeekend = day.getDay() === 0 || day.getDay() === 6;
@@ -156,13 +155,16 @@ export function WeekView({
                 key={i}
                 data-testid={`day-header-${i}`}
                 onClick={() => onDayClick(day)}
-                className={`flex-1 text-center py-2 cursor-pointer border-l border-gray-200 transition-colors ${today ? 'bg-indigo-50/50' : isWeekend ? 'hover:bg-violet-50/40' : 'hover:bg-indigo-50/30'}`}
+                className={`min-w-0 flex-1 cursor-pointer border-l border-gray-200 py-1.5 text-center transition-colors md:py-2 ${today ? 'bg-blue-50/70' : isWeekend ? 'hover:bg-slate-50' : 'hover:bg-blue-50/40'}`}
               >
-                <div className={`text-xs ${isWeekend ? 'text-indigo-300' : 'text-neutral-400'}`}>{weekDays[day.getDay()]}</div>
+                <div className={`text-[11px] leading-4 md:text-xs ${isWeekend ? 'text-slate-400' : 'text-neutral-500'}`}>
+                  <span className="hidden md:inline">{weekDays[day.getDay()]}</span>
+                  <span className="md:hidden">{weekDays[day.getDay()].replace(/^周/, '')}</span>
+                </div>
                 <div
                   className={[
-                    'text-lg font-medium mx-auto w-8 h-8 flex items-center justify-center rounded-full',
-                    today ? 'bg-indigo-500 text-white shadow-sm shadow-indigo-200' : 'text-neutral-800',
+                    'mx-auto flex h-8 w-8 items-center justify-center rounded-full text-lg font-medium md:h-9 md:w-9',
+                    today ? 'bg-blue-600 text-white shadow-sm shadow-blue-200' : 'text-neutral-800',
                   ].join(' ')}
                 >
                   {day.getDate()}
@@ -175,7 +177,7 @@ export function WeekView({
         {/* All-day row */}
         {hasAllDay && (
           <div className="flex border-t border-gray-200">
-            <div className="w-20 flex-shrink-0 text-xs text-gray-400 flex items-center justify-end pr-2 py-1">
+            <div className="w-14 flex-shrink-0 text-xs text-gray-400 flex items-center justify-end pr-1 py-1 sm:w-16 md:w-20 md:pr-2">
               {t('allDay2')}
             </div>
             {days.map((day, i) => {
@@ -202,28 +204,16 @@ export function WeekView({
 
       {/* Grid content */}
       <div className="flex relative" style={{ height: `${48 * SLOT_HEIGHT}px` }}>
-        {/* Empty state overlay */}
-        {events.filter(e => !e.allDay).length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-            <div className="text-center px-8 py-6 rounded-lg bg-white/80 backdrop-blur-sm border border-slate-200 shadow-sm">
-              <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                <AppIcon name="mic" className="h-5 w-5" />
-              </div>
-              <p className="text-sm text-gray-500 mb-1">{t('emptyStateHint')}</p>
-              <p className="text-sm text-indigo-500 font-medium">「{t('emptyStateExample')}」</p>
-            </div>
-          </div>
-        )}
         {/* Time labels */}
-        <div className="w-20 flex-shrink-0 relative">
+        <div className="w-14 flex-shrink-0 relative sm:w-16 md:w-20">
           {Array.from({ length: 24 }, (_, hour) => (
             <div
               key={hour}
-              className="absolute w-full flex items-start justify-end pr-2 pt-1"
+              className="absolute w-full flex items-start justify-end pr-1 pt-1 md:pr-2"
               style={{ top: `${hour * 2 * SLOT_HEIGHT}px`, height: `${SLOT_HEIGHT}px` }}
             >
               <span
-                className="text-xs text-gray-600 whitespace-nowrap"
+                className="text-[11px] text-gray-500 whitespace-nowrap md:text-xs md:text-gray-600"
                 style={{ textShadow: '0 0 4px #fff, 0 0 8px #fff' }}
               >
                 {formatTimeSlot(hour, 0, use24h, language)}
@@ -242,7 +232,7 @@ export function WeekView({
           return (
             <div
               key={colIndex}
-              className={`flex-1 relative overflow-hidden border-l border-gray-200 ${today ? 'bg-indigo-50/20' : isWeekend ? 'bg-violet-50/20' : ''} ${onSlotClick ? 'cursor-cell' : ''}`}
+              className={`min-w-0 flex-1 relative overflow-hidden border-l border-gray-200 ${today ? 'bg-blue-50/30' : isWeekend ? 'bg-slate-50/60' : ''} ${onSlotClick ? 'cursor-cell' : ''}`}
               onClick={e => handleColumnClick(e, day)}
             >
               {/* Slot grid lines */}
@@ -283,7 +273,7 @@ export function WeekView({
                   <div
                     key={`cont-${event.id}`}
                     onClick={e => { e.stopPropagation(); onEventClick?.(event); }}
-                    className={`absolute rounded px-1 py-0.5 ${colorFor(event)} text-white overflow-hidden opacity-90 ${onEventClick ? 'cursor-pointer hover:brightness-110' : ''}`}
+                    className={`absolute rounded-md px-1 py-0.5 ${colorFor(event)} text-white overflow-hidden opacity-90 ${onEventClick ? 'cursor-pointer hover:brightness-110' : ''}`}
                     style={{ top: 0, height: `${heightPx}px`, left: '1px', right: '1px' }}
                   >
                     <div className="text-xs font-medium truncate leading-tight flex items-center gap-0.5">
@@ -314,7 +304,7 @@ export function WeekView({
                     key={event.id}
                     data-testid={`week-event-${event.id}`}
                     onClick={e => { e.stopPropagation(); onEventClick?.(event); }}
-                    className={`absolute rounded px-1 py-0.5 ${colorFor(event)} text-white overflow-hidden ${onEventClick ? 'cursor-pointer hover:brightness-110' : ''}`}
+                    className={`absolute rounded-md px-1 py-0.5 shadow-sm ${colorFor(event)} text-white overflow-hidden ${onEventClick ? 'cursor-pointer hover:brightness-110' : ''}`}
                     style={{
                       top: `${topPx}px`,
                       height: `${heightPx}px`,

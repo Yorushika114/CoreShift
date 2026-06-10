@@ -6,6 +6,7 @@ import { useSpeechRecognition } from '@/lib/voice/useSpeechRecognition';
 import { formatDate, formatTime, formatTimeCN } from '@/lib/calendar/date-utils';
 import { EVENT_COLOR_OPTIONS } from '@/lib/calendar/color-utils';
 import { useSettings } from '@/contexts/SettingsContext';
+import { AppIcon } from '@/components/ui/AppIcon';
 import type { CalendarEvent, ParsedCommand } from '@/types';
 
 interface Props {
@@ -366,15 +367,15 @@ export function EventEditorPanel({
                 <button
                   type="button"
                   onClick={() => (listening ? stopMic() : startMic())}
-                  className={`absolute bottom-2.5 right-2.5 w-8 h-8 rounded-full flex items-center justify-center text-base transition ${
+                  className={`absolute bottom-2.5 right-2.5 w-8 h-8 rounded-lg flex items-center justify-center transition ${
                     listening
-                      ? 'bg-blue-500 text-white animate-pulse'
-                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                      ? 'bg-blue-600 text-white animate-pulse'
+                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                   }`}
                   aria-label={listening ? t('stop') : t('voiceInput')}
                   title={listening ? t('stop') : t('voiceInput')}
                 >
-                  🎙
+                  <AppIcon name="mic" className="h-4 w-4" />
                 </button>
               )}
             </div>
@@ -417,7 +418,7 @@ export function EventEditorPanel({
                 )}
                 {parsed.recurrence && (
                   <div className="flex items-center gap-1.5 text-sm text-indigo-600 mt-1">
-                    <span>↻</span>
+                    <AppIcon name="refresh" className="h-3.5 w-3.5" />
                     <span>{formatRecurrenceSummary(
                       parsed.recurrence,
                       parsed.recurrenceEndAt,

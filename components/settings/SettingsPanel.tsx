@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { useSettings } from '@/contexts/SettingsContext';
+import { AppIcon } from '@/components/ui/AppIcon';
 
 const TZ_LABELS: Record<string, { zh: string; en: string }> = {
   'Asia/Shanghai':       { zh: '中国 — 上海/北京 (UTC+8)',         en: 'China — Shanghai/Beijing (UTC+8)' },
@@ -87,24 +88,27 @@ export function SettingsPanel({ googleConnected, syncing, syncMsg, onSync, onDis
   }
 
   return (
-    <div className="border border-gray-200 rounded-lg">
+    <div className="border border-slate-200 rounded-lg bg-white">
       <button
         ref={btnRef}
         onClick={handleToggle}
-        className="w-full flex items-center justify-between px-3 py-2 text-xs text-gray-600 hover:bg-gray-50 transition-colors rounded-lg"
+        className="w-full flex items-center justify-between px-3 py-2 text-xs text-slate-600 hover:bg-slate-50 transition-colors rounded-lg"
       >
         <span className="flex items-center gap-1.5">
-          <span>⚙</span>
+          <AppIcon name="settings" className="h-4 w-4 text-slate-500" />
           <span className="font-medium">{t('settings')}</span>
         </span>
-        <span className={`transition-transform duration-200 text-[10px] ${open ? 'rotate-180' : ''}`}>▼</span>
+        <AppIcon
+          name="chevron-down"
+          className={`h-3.5 w-3.5 text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+        />
       </button>
 
       {open && panelPos && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div
-            className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-lg overflow-y-auto"
+            className="fixed z-50 bg-white border border-slate-200 rounded-lg shadow-lg overflow-y-auto"
             style={{ bottom: panelPos.bottom, left: panelPos.left, width: panelPos.width, maxHeight: 'min(420px, calc(100vh - 120px))' }}
           ><div className="px-3 pt-3 pb-4 space-y-4">
 
@@ -213,7 +217,11 @@ export function SettingsPanel({ googleConnected, syncing, syncMsg, onSync, onDis
                   disabled={syncing}
                   className="w-full flex items-center justify-center gap-1.5 border border-gray-200 rounded py-1.5 text-xs text-gray-600 hover:bg-gray-50 transition disabled:opacity-50"
                 >
-                  <span>{syncing ? '⏳' : '🔄'}</span>
+                  {syncing ? (
+                    <span className="h-3.5 w-3.5 rounded-full border-2 border-gray-300 border-t-blue-500 animate-spin" />
+                  ) : (
+                    <AppIcon name="refresh" className="h-3.5 w-3.5" />
+                  )}
                   {syncing ? t('syncing') : t('googleSync')}
                 </button>
                 {syncMsg && <p className="text-xs text-gray-500">{syncMsg}</p>}
@@ -261,7 +269,7 @@ export function SettingsPanel({ googleConnected, syncing, syncMsg, onSync, onDis
                 href="/api/auth/google"
                 className="flex items-center justify-center gap-1.5 border border-gray-200 rounded py-1.5 text-xs text-gray-600 hover:bg-gray-50 transition"
               >
-                <span>🗓</span>
+                <AppIcon name="calendar" className="h-3.5 w-3.5" />
                 {t('googleConnect')}
               </a>
             )}
@@ -278,18 +286,24 @@ export function SettingsPanel({ googleConnected, syncing, syncMsg, onSync, onDis
               <button
                 onClick={() => icsInputRef.current?.click()}
                 disabled={icsImporting}
-                className="flex-1 text-xs py-1.5 border border-gray-200 rounded hover:bg-gray-50 transition disabled:opacity-50"
+                className="flex flex-1 items-center justify-center gap-1.5 text-xs py-1.5 border border-gray-200 rounded hover:bg-gray-50 transition disabled:opacity-50"
               >
+                {icsImporting ? (
+                  <span className="h-3.5 w-3.5 rounded-full border-2 border-gray-300 border-t-blue-500 animate-spin" />
+                ) : (
+                  <AppIcon name="download" className="h-3.5 w-3.5" />
+                )}
                 {icsImporting
                   ? (language === 'zh' ? '导入中…' : 'Importing…')
-                  : (language === 'zh' ? '📥 导入 .ics' : '📥 Import .ics')}
+                  : (language === 'zh' ? '导入 .ics' : 'Import .ics')}
               </button>
               <a
                 href="/api/ics/export"
                 download="coreshift-export.ics"
-                className="flex-1 text-xs py-1.5 border border-gray-200 rounded hover:bg-gray-50 transition text-center"
+                className="flex flex-1 items-center justify-center gap-1.5 text-xs py-1.5 border border-gray-200 rounded hover:bg-gray-50 transition text-center"
               >
-                {language === 'zh' ? '📤 导出 .ics' : '📤 Export .ics'}
+                <AppIcon name="upload" className="h-3.5 w-3.5" />
+                {language === 'zh' ? '导出 .ics' : 'Export .ics'}
               </a>
             </div>
             <input

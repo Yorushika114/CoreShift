@@ -8,6 +8,7 @@ import { matchEvents } from '@/lib/voice/matchEvents';
 import { applyModify } from '@/lib/voice/applyModify';
 import { formatDateCN, formatTimeCN } from '@/lib/calendar/date-utils';
 import { useSettings } from '@/contexts/SettingsContext';
+import { AppIcon } from '@/components/ui/AppIcon';
 import type { BudgetProgress, CalendarEvent, ParsedCommand } from '@/types';
 import { RecurringActionDialog, type RecurringActionMode } from './RecurringActionDialog';
 import { realEventId } from '@/lib/calendar/recurrence';
@@ -193,7 +194,7 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
         }
 
         onQuery(targetDate);
-        // 立即展示列表，AI 摘要异步后台生成
+        // 立即展示列表，摘要异步后台生成
         setResult({ kind: 'query', date: targetDate, events, aiSummary: undefined });
         setBusy(false);
         speak(events.length === 0
@@ -516,7 +517,12 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 overflow-y-auto max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <span className="text-sm font-medium text-gray-700">🎙 {t('voiceInput')}</span>
+          <span className="flex items-center gap-2 text-sm font-medium text-gray-700">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+              <AppIcon name="mic" className="h-4 w-4" />
+            </span>
+            {t('voiceInput')}
+          </span>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setLang(l => l === 'zh-CN' ? 'en-US' : 'zh-CN')}
@@ -669,7 +675,9 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
               <>
                 {result.aiSummary && (
                   <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3">
-                    <p className="text-xs text-blue-400 font-medium mb-1">AI 摘要</p>
+                    <p className="text-xs text-blue-400 font-medium mb-1">
+                      {lang === 'en-US' ? 'Schedule Summary' : '日程摘要'}
+                    </p>
                     <p className="text-sm text-blue-800 leading-relaxed">{result.aiSummary}</p>
                   </div>
                 )}
@@ -697,8 +705,8 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
                 <div className="flex items-center justify-between mb-1">
                   <p className="text-xs text-blue-400 font-medium">
                     {result.rangeLabel
-                      ? (lang === 'en-US' ? `AI Summary · ${result.rangeLabel}` : `AI 摘要 · ${result.rangeLabel}`)
-                      : (lang === 'en-US' ? 'AI Summary' : 'AI 摘要')}
+                      ? (lang === 'en-US' ? `Schedule Summary · ${result.rangeLabel}` : `日程摘要 · ${result.rangeLabel}`)
+                      : (lang === 'en-US' ? 'Schedule Summary' : '日程摘要')}
                   </p>
                   <button
                     onClick={() => setTtsEnabled(v => !v)}
@@ -712,7 +720,7 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
                       ? (lang === 'en-US' ? 'Mute TTS' : '关闭朗读')
                       : (lang === 'en-US' ? 'Enable TTS' : '开启朗读')}
                   >
-                    {ttsEnabled ? '🔊' : '🔇'}
+                    <AppIcon name={ttsEnabled ? 'volume' : 'volume-off'} className="h-3.5 w-3.5" />
                   </button>
                 </div>
                 <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3">
@@ -725,7 +733,10 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
                       aria-expanded={summaryListOpen}
                       className="text-xs text-gray-400 hover:text-gray-600 transition flex items-center gap-1 mt-2"
                     >
-                      <span>{summaryListOpen ? '▾' : '▸'}</span>
+                      <AppIcon
+                        name="chevron-down"
+                        className={`h-3.5 w-3.5 transition-transform ${summaryListOpen ? '' : '-rotate-90'}`}
+                      />
                       {summaryListOpen
                         ? (lang === 'en-US' ? 'Collapse' : '收起')
                         : (lang === 'en-US'
@@ -823,7 +834,7 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
                       ? (lang === 'en-US' ? 'Mute TTS' : '关闭朗读')
                       : (lang === 'en-US' ? 'Enable TTS' : '开启朗读')}
                   >
-                    {ttsEnabled ? '🔊' : '🔇'}
+                    <AppIcon name={ttsEnabled ? 'volume' : 'volume-off'} className="h-3.5 w-3.5" />
                   </button>
                 </div>
                 {result.progresses.length === 0 ? (
@@ -965,21 +976,21 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
           </div>
         ) : busy ? (
           <div className="px-5 py-10 flex flex-col items-center gap-3">
-            <span className="text-2xl animate-pulse">⏳</span>
+            <span className="h-6 w-6 rounded-full border-2 border-gray-200 border-t-blue-500 animate-spin" />
             <p className="text-sm text-gray-500">{t('processing')}</p>
           </div>
         ) : !textMode ? (
           <div className="px-5 py-8 flex flex-col items-center gap-5">
             <button
               onClick={listening ? stop : start}
-              className={`w-20 h-20 rounded-full flex items-center justify-center text-3xl transition ${
+              className={`w-20 h-20 rounded-full flex items-center justify-center transition ${
                 listening
-                  ? 'bg-blue-500 text-white animate-pulse shadow-lg shadow-blue-200'
-                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  ? 'bg-blue-600 text-white animate-pulse shadow-lg shadow-blue-200'
+                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
               }`}
               aria-label={listening ? t('stop') : t('startSpeaking')}
             >
-              🎙
+              <AppIcon name="mic" className="h-8 w-8" />
             </button>
 
             <p className="text-sm text-gray-500 min-h-[1.25rem]">
@@ -1001,15 +1012,17 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
             <div className="flex gap-2">
               <button
                 onClick={() => { stop(); void handleSummary('today'); }}
-                className="text-xs px-3 py-1 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-100 transition"
+                className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 transition"
               >
-                {lang === 'en-US' ? '📋 Today' : '📋 今天'}
+                <AppIcon name="list" className="h-3.5 w-3.5" />
+                {lang === 'en-US' ? 'Today' : '今天'}
               </button>
               <button
                 onClick={() => { stop(); void handleSummary('week'); }}
-                className="text-xs px-3 py-1 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-100 transition"
+                className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 transition"
               >
-                {lang === 'en-US' ? '📋 This Week' : '📋 本周'}
+                <AppIcon name="list" className="h-3.5 w-3.5" />
+                {lang === 'en-US' ? 'This Week' : '本周'}
               </button>
             </div>
 
@@ -1038,15 +1051,16 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
               {supported ? (
                 <button
                   onClick={() => { setTextMode(false); start(); }}
-                  className="text-xs text-blue-500 hover:text-blue-700 transition"
+                  className="inline-flex items-center gap-1.5 text-xs text-blue-500 hover:text-blue-700 transition"
                 >
+                  <AppIcon name="mic" className="h-3.5 w-3.5" />
                   {t('switchToVoice')}
                 </button>
               ) : <span />}
               <button
                 onClick={submitText}
                 disabled={!textInput.trim()}
-                className="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-full hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
               >
                 {t('ok')}
               </button>
@@ -1054,15 +1068,17 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
             <div className="flex gap-2">
               <button
                 onClick={() => void handleSummary('today')}
-                className="text-xs px-3 py-1 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-100 transition"
+                className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 transition"
               >
-                {lang === 'en-US' ? '📋 Today' : '📋 今天'}
+                <AppIcon name="list" className="h-3.5 w-3.5" />
+                {lang === 'en-US' ? 'Today' : '今天'}
               </button>
               <button
                 onClick={() => void handleSummary('week')}
-                className="text-xs px-3 py-1 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-100 transition"
+                className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 transition"
               >
-                {lang === 'en-US' ? '📋 This Week' : '📋 本周'}
+                <AppIcon name="list" className="h-3.5 w-3.5" />
+                {lang === 'en-US' ? 'This Week' : '本周'}
               </button>
             </div>
           </div>

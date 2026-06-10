@@ -6,7 +6,6 @@ import { isToday, toISODateString, formatTimeSlot, getDateStringInTimezone } fro
 import { getHoursInTimezone } from '@/lib/calendar/date-utils';
 import { colorFor } from '@/lib/calendar/color-utils';
 import { useSettings } from '@/contexts/SettingsContext';
-import { AppIcon } from '@/components/ui/AppIcon';
 import type { CalendarEvent } from '@/types';
 
 const SLOT_HEIGHT = 48; // px per 30-min slot
@@ -103,11 +102,11 @@ export function DayView({ date, events, focusTime, onSlotClick, onEventClick }: 
   }, [date, focusTime?.getTime(), timezone]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-white/70">
+    <div className="flex-1 flex flex-col overflow-hidden bg-white/80">
       {/* All-day strip */}
       {allDayEvents.length > 0 && (
-        <div className="flex-shrink-0 flex border-b border-gray-200 bg-white/80 backdrop-blur-sm">
-          <div className="w-20 flex-shrink-0 text-xs text-gray-400 flex items-center justify-end pr-2 py-1">
+        <div className="flex-shrink-0 flex border-b border-gray-200 bg-white/95 backdrop-blur-sm">
+          <div className="w-14 flex-shrink-0 text-xs text-gray-400 flex items-center justify-end pr-1 py-1 sm:w-16 md:w-20 md:pr-2">
             {t('allDay2')}
           </div>
           <div className="flex-1 border-l border-gray-200 p-1 flex flex-col gap-0.5">
@@ -132,18 +131,6 @@ export function DayView({ date, events, focusTime, onSlotClick, onEventClick }: 
           style={{ height: `${48 * SLOT_HEIGHT}px` }}
           onClick={handleGridClick}
         >
-          {/* Empty state overlay */}
-          {timedEvents.length === 0 && allDayEvents.length === 0 && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-              <div className="text-center px-8 py-6 rounded-lg bg-white/80 backdrop-blur-sm border border-slate-200 shadow-sm">
-                <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                  <AppIcon name="mic" className="h-5 w-5" />
-                </div>
-                <p className="text-sm text-gray-500 mb-1">{t('emptyStateHint')}</p>
-                <p className="text-sm text-indigo-500 font-medium">「{t('emptyStateExample')}」</p>
-              </div>
-            </div>
-          )}
           {/* Time slots */}
           {Array.from({ length: 48 }, (_, i) => {
             const hour = Math.floor(i / 2);
@@ -155,10 +142,10 @@ export function DayView({ date, events, focusTime, onSlotClick, onEventClick }: 
                 className={`absolute w-full flex ${minute === 0 ? 'border-b border-gray-200' : 'border-b border-gray-100'}`}
                 style={{ top: `${i * SLOT_HEIGHT}px`, height: `${SLOT_HEIGHT}px` }}
               >
-                <div className="w-20 flex-shrink-0 flex items-start justify-end pr-3 pt-1">
+                <div className="w-14 flex-shrink-0 flex items-start justify-end pr-1 pt-1 sm:w-16 md:w-20 md:pr-3">
                   {minute === 0 && (
                     <span
-                      className="text-xs text-gray-600 whitespace-nowrap"
+                      className="text-[11px] text-gray-500 whitespace-nowrap md:text-xs md:text-gray-600"
                       style={{ textShadow: '0 0 4px #fff, 0 0 8px #fff' }}
                     >
                       {formatTimeSlot(hour, 0, use24h, language)}
@@ -173,7 +160,7 @@ export function DayView({ date, events, focusTime, onSlotClick, onEventClick }: 
           {/* Current time line */}
           {showNowLine && nowTop !== null && (
             <div
-              className="absolute left-20 right-0 z-10 pointer-events-none"
+              className="absolute left-14 right-0 z-10 pointer-events-none sm:left-16 md:left-20"
               style={{ top: `${nowTop}px` }}
               data-testid="now-line"
             >
@@ -184,7 +171,7 @@ export function DayView({ date, events, focusTime, onSlotClick, onEventClick }: 
           )}
 
           {/* Timed event blocks — wrapper offsets the time-label column */}
-          <div className="absolute left-20 right-2 top-0 bottom-0 pointer-events-none">
+          <div className="absolute left-14 right-2 top-0 bottom-0 pointer-events-none sm:left-16 md:left-20">
             {/* Cross-day continuation segments */}
             {continuationEvents.map(event => {
               const endDay = getDateStringInTimezone(new Date(event.endAt!), timezone);
