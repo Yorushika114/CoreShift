@@ -218,7 +218,7 @@ export function WeekView({
           return (
             <div
               key={colIndex}
-              className={`flex-1 relative border-l border-gray-200 ${today ? 'bg-indigo-50/20' : isWeekend ? 'bg-violet-50/20' : ''} ${onSlotClick ? 'cursor-cell' : ''}`}
+              className={`flex-1 relative overflow-hidden border-l border-gray-200 ${today ? 'bg-indigo-50/20' : isWeekend ? 'bg-violet-50/20' : ''} ${onSlotClick ? 'cursor-cell' : ''}`}
               onClick={e => handleColumnClick(e, day)}
             >
               {/* Slot grid lines */}
@@ -249,7 +249,8 @@ export function WeekView({
                 const { hours: startH, minutes: startM } = getHoursInTimezone(start, timezone);
                 const topPx = (startH * 60 + startM) / 30 * SLOT_HEIGHT;
                 const durationMin = (end.getTime() - start.getTime()) / 60000;
-                const heightPx = Math.max(durationMin / 30 * SLOT_HEIGHT - 1, 24);
+                const maxHeightPx = 48 * SLOT_HEIGHT - topPx;
+                const heightPx = Math.min(Math.max(durationMin / 30 * SLOT_HEIGHT - 1, 24), maxHeightPx);
                 const isShort = heightPx < 40;
                 const colW = 100 / totalCols;
                 const leftPct = col * colW;

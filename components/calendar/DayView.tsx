@@ -177,7 +177,8 @@ export function DayView({ date, events, focusTime, onSlotClick, onEventClick }: 
               const { hours: startH, minutes: startM } = getHoursInTimezone(start, timezone);
               const topPx = (startH * 60 + startM) / 30 * SLOT_HEIGHT;
               const durationMin = (end.getTime() - start.getTime()) / 60000;
-              const heightPx = Math.max(durationMin / 30 * SLOT_HEIGHT - 1, 24);
+              const maxHeightPx = 48 * SLOT_HEIGHT - topPx;
+              const heightPx = Math.min(Math.max(durationMin / 30 * SLOT_HEIGHT - 1, 24), maxHeightPx);
               const isShort = heightPx < 40;
               const colW = 100 / totalCols;
               const leftPct = col * colW;
