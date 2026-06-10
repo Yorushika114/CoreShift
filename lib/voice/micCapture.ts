@@ -6,19 +6,37 @@ export class MicCapture {
   private source: MediaStreamAudioSourceNode | null = null;
   private workletNode: AudioWorkletNode | null = null;
   private stream: MediaStream | null = null;
+  // start() 是异步的（await getUserMedia / addModule）。若在 await 期间 stop() 被调用，
+  // 必须让 start() 的后续代码感知并干净退出，否则会用到已关闭的 ctx 抛错。
+  private stopped = false;
 
   async start(onChunk: (pcm: ArrayBuffer) => void): Promise<void> {
-    this.stream = await navigator.mediaDevices.getUserMedia({
+    this.stopped = false;
+
+    const stream = await navigator.mediaDevices.getUserMedia({
       audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true },
     });
+    if (this.stopped) {
+      stream.getTracks().forEach(t => t.stop());
+      return;
+    }
+    this.stream = stream;
 
     // 强制 16kHz：讯飞 IAT 要求 audio/L16;rate=16000
-    this.ctx = new AudioContext({ sampleRate: 16000 });
-    await this.ctx.audioWorklet.addModule('/pcm-capture-processor.js');
+    const ctx = new AudioContext({ sampleRate: 16000 });
+    await ctx.audioWorklet.addModule('/pcm-capture-processor.js');
+    if (this.stopped) {
+      void ctx.close();
+      stream.getTracks().forEach(t => t.stop());
+      this.stream = null;
+      return;
+    }
+    this.ctx = ctx;
 
-    this.source = this.ctx.createMediaStreamSource(this.stream);
-    this.workletNode = new AudioWorkletNode(this.ctx, 'pcm-capture-processor');
+    this.source = ctx.createMediaStreamSource(stream);
+    this.workletNode = new AudioWorkletNode(ctx, 'pcm-capture-processor');
     this.workletNode.port.onmessage = (e: MessageEvent<ArrayBuffer>) => {
+      if (this.stopped) return;
       onChunk(e.data);
     };
 
@@ -27,6 +45,7 @@ export class MicCapture {
   }
 
   stop(): void {
+    this.stopped = true;
     this.workletNode?.disconnect();
     this.source?.disconnect();
     this.stream?.getTracks().forEach(t => t.stop());

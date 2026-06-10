@@ -74,6 +74,8 @@ function CalendarPageInner() {
   const undoStackRef = useRef<UndoAction[]>([]);
   const [undoToast, setUndoToast] = useState<string | null>(null);
   const [voiceDirectProcess, setVoiceDirectProcess] = useState(false);
+  // 浮层打开后是否自动开始录音：FAB 打开为 true；空格场景为 false（空格本身已是唯一 ASR）
+  const [voiceAutoListen, setVoiceAutoListen] = useState(true);
   const [isSpaceListening, setIsSpaceListening] = useState(false);
   const [hasUsedSpaceShortcut, setHasUsedSpaceShortcut] = useState(false);
   const [voiceButtonClicksWithoutSpace, setVoiceButtonClicksWithoutSpace] = useState(0);
@@ -84,6 +86,9 @@ function CalendarPageInner() {
   const voiceOpenRef = useRef(false);
   const spaceHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const spaceRecognizedRef = useRef('');
+  // 空格松开后处于"等待 ASR 结果"状态；结果到达（或兜底超时）再打开浮层
+  const spacePendingResultRef = useRef(false);
+  const spaceOpenFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const voiceShortcutToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function showVoiceShortcutToast() {
@@ -510,14 +515,38 @@ function CalendarPageInner() {
   const prevLabel = view === 'year' ? t('prevYear') : view === 'month' ? t('prevMonth') : view === 'week' ? t('prevWeek') : t('prevDay');
   const nextLabel = view === 'year' ? t('nextYear') : view === 'month' ? t('nextMonth') : view === 'week' ? t('nextWeek') : t('nextDay');
 
-  const { start: spaceStart, stop: spaceStop } = useSpeechRecognition({
+  const { start: spaceStart, stop: spaceStop, warmup: spaceWarmup, cancel: spaceCancel } = useSpeechRecognition({
     lang: language === 'en' ? 'en-US' : 'zh-CN',
-    onResult: (text) => { if (text) spaceRecognizedRef.current = text; },
+    onResult: (text) => {
+      if (text) spaceRecognizedRef.current = text;
+      // 空格松开后处于"等待 ASR 结果"状态，结果到达立即打开浮层
+      if (spacePendingResultRef.current && !voiceOpenRef.current) {
+        spacePendingResultRef.current = false;
+        if (spaceOpenFallbackTimerRef.current) {
+          clearTimeout(spaceOpenFallbackTimerRef.current);
+          spaceOpenFallbackTimerRef.current = null;
+        }
+        if (text) {
+          setVoiceDraft(text);
+          setVoiceDirectProcess(true);
+          setVoiceAutoListen(false);
+          setVoiceOpen(true);
+        } else {
+          // 未识别到语音：打开浮层但不自动录音（空格已是唯一 ASR），让用户重试或改文字
+          setVoiceAutoListen(false);
+          setVoiceOpen(true);
+        }
+      }
+    },
   });
   const spaceStartRef = useRef(spaceStart);
   const spaceStopRef = useRef(spaceStop);
+  const spaceWarmupRef = useRef(spaceWarmup);
+  const spaceCancelRef = useRef(spaceCancel);
   useEffect(() => { spaceStartRef.current = spaceStart; }, [spaceStart]);
   useEffect(() => { spaceStopRef.current = spaceStop; }, [spaceStop]);
+  useEffect(() => { spaceWarmupRef.current = spaceWarmup; }, [spaceWarmup]);
+  useEffect(() => { spaceCancelRef.current = spaceCancel; }, [spaceCancel]);
   useEffect(() => { voiceOpenRef.current = voiceOpen; }, [voiceOpen]);
 
   useEffect(() => {
@@ -525,7 +554,11 @@ function CalendarPageInner() {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === ' ' && !e.repeat && !voiceOpenRef.current && !isSpaceListeningRef.current) {
         e.preventDefault();
+        // 立即预热：建立讯飞 WS 并开始采集（握手期间音频缓存），消除 2.5s 握手延迟
+        spaceWarmupRef.current();
         spaceHoldTimerRef.current = setTimeout(() => {
+          // 计时器已触发，清空 ref，避免 keyup 误判为短按而调用 cancel()
+          spaceHoldTimerRef.current = null;
           isSpaceListeningRef.current = true;
           setIsSpaceListening(true);
           spaceRecognizedRef.current = '';
@@ -536,20 +569,29 @@ function CalendarPageInner() {
     function onKeyUp(e: KeyboardEvent) {
       if (e.key !== ' ') return;
       if (spaceHoldTimerRef.current) {
+        // 短按（未达 500ms）：取消预热，丢弃已采集音频，不打开浮层
         clearTimeout(spaceHoldTimerRef.current);
         spaceHoldTimerRef.current = null;
+        spaceCancelRef.current();
       }
       if (isSpaceListeningRef.current) {
         spaceStopRef.current();
         isSpaceListeningRef.current = false;
         setIsSpaceListening(false);
         markSpaceShortcutUsed();
-        const text = spaceRecognizedRef.current;
-        if (text) {
-          setVoiceDraft(text);
-          setVoiceDirectProcess(true);
-          setVoiceOpen(true);
-        }
+        // 不能在此处同步读 spaceRecognizedRef：stop() 已通知讯飞结束音频，
+        // 但最终识别结果通过 WebSocket 异步返回，此时 ref 还是空的。
+        // 改为设 pending 标记，等 onResult 回调到达后再打开浮层。
+        spacePendingResultRef.current = true;
+        // 兜底：4s 内若无结果（网络差/无语音），仍打开浮层供用户手动输入
+        spaceOpenFallbackTimerRef.current = setTimeout(() => {
+          if (spacePendingResultRef.current && !voiceOpenRef.current) {
+            spacePendingResultRef.current = false;
+            spaceOpenFallbackTimerRef.current = null;
+            setVoiceAutoListen(false);
+            setVoiceOpen(true);
+          }
+        }, 4000);
       }
     }
     window.addEventListener('keydown', onKeyDown);
@@ -562,6 +604,7 @@ function CalendarPageInner() {
 
   function openVoiceWithDraft(command?: string) {
     setVoiceDraft(command);
+    setVoiceAutoListen(true);
     setVoiceOpen(true);
   }
 
@@ -945,10 +988,12 @@ function CalendarPageInner() {
           onChanged={handleVoiceChanged}
           initialText={voiceDraft}
           directProcess={voiceDirectProcess}
+          autoListen={voiceAutoListen}
           onClose={() => {
             setVoiceOpen(false);
             setVoiceDraft(undefined);
             setVoiceDirectProcess(false);
+            setVoiceAutoListen(true);
           }}
         />
       )}

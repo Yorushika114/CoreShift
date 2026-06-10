@@ -25,6 +25,8 @@ interface Props {
   onClose: () => void;
   initialText?: string;
   directProcess?: boolean;
+  /** 打开后是否自动开始录音。FAB 打开为 true；空格场景为 false（空格本身已录过音）。 */
+  autoListen?: boolean;
 }
 
 
@@ -61,7 +63,7 @@ async function fetchRange([start, end]: [Date, Date]): Promise<CalendarEvent[]> 
   return res.json();
 }
 
-export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, onClose, initialText, directProcess }: Props) {
+export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, onClose, initialText, directProcess, autoListen = true }: Props) {
   const { t, language, timezone } = useSettings();
   const ERROR_MESSAGES: Record<SpeechErrorKind, string> = {
     unsupported: language === 'zh' ? '当前浏览器不支持语音识别' : 'Voice recognition not supported in this browser',
@@ -74,7 +76,7 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
   };
   const [textMode, setTextMode] = useState(false);
   const [textInput, setTextInput] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(() => !!(directProcess && initialText));
   const [result, setResult] = useState<Result | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -100,15 +102,19 @@ export function VoiceCommandOverlay({ onCreate, onModify, onQuery, onChanged, on
   const { speak } = useTTS();
 
   useEffect(() => {
+    if (directProcess && initialText) return;
+    if (!autoListen) return; // 空格场景：不自动录音，停在 idle 供用户重试或改文字
     if (supported) start();
     else setTextMode(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supported, start]);
 
   useEffect(() => {
     if (!initialText) return;
     stop();
     if (directProcess) {
-      setTimeout(() => void handleCommand(initialText), 200);
+      setBusy(true);
+      void handleCommand(initialText);
     } else {
       setTextMode(true);
       setTextInput(initialText);
