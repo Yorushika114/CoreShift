@@ -54,6 +54,7 @@ interface EditorState {
 function CalendarPageInner() {
   const { bgType, bgValue, t, language } = useSettings();
   const [view, setView] = useState<ViewMode>('week');
+  const [viewReady, setViewReady] = useState(false);
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [viewDate, setViewDate] = useState(() => new Date());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -79,6 +80,7 @@ function CalendarPageInner() {
   const [voiceShortcutToastCount, setVoiceShortcutToastCount] = useState(0);
   const [voiceShortcutToast, setVoiceShortcutToast] = useState(false);
   const isSpaceListeningRef = useRef(false);
+  const fetchAbortRef = useRef<AbortController | null>(null);
   const voiceOpenRef = useRef(false);
   const spaceHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const spaceRecognizedRef = useRef('');
@@ -132,6 +134,7 @@ function CalendarPageInner() {
       setVoiceButtonClicksWithoutSpace(readStoredCount('cs_voice_button_clicks_without_space'));
       setVoiceShortcutToastCount(readStoredCount('cs_voice_shortcut_toast_count'));
     } catch {}
+    setViewReady(true);
   }, []);
 
   useEffect(() => {
@@ -211,6 +214,11 @@ function CalendarPageInner() {
   }
 
   const fetchEvents = useCallback(async (date: Date, currentView: ViewMode) => {
+    // Cancel any in-flight fetch to prevent stale responses overwriting newer data
+    fetchAbortRef.current?.abort();
+    const abort = new AbortController();
+    fetchAbortRef.current = abort;
+
     let start: Date, end: Date;
     if (currentView === 'year') {
       start = new Date(date.getFullYear(), 0, 1);
@@ -227,8 +235,8 @@ function CalendarPageInner() {
       end = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
     }
 
-    // Stale-while-revalidate：先从 localStorage 渲染缓存，再后台刷新
-    const cacheKey = 'coreshift_events_cache';
+    // Stale-while-revalidate with per-view cache keys so week cache never bleeds into day view
+    const cacheKey = `coreshift_events_cache_${currentView}`;
     try {
       const cached = localStorage.getItem(cacheKey);
       if (cached) {
@@ -240,15 +248,20 @@ function CalendarPageInner() {
     try {
       setLoading(true);
       const res = await fetch(
-        `/api/events?start=${start.toISOString()}&end=${end.toISOString()}`
+        `/api/events?start=${start.toISOString()}&end=${end.toISOString()}`,
+        { signal: abort.signal }
       );
       if (res.ok) {
         const data = await res.json();
-        setEvents(data);
-        try { localStorage.setItem(cacheKey, JSON.stringify(data)); } catch {}
+        if (!abort.signal.aborted) {
+          setEvents(data);
+          try { localStorage.setItem(cacheKey, JSON.stringify(data)); } catch {}
+        }
       }
+    } catch {
+      // AbortError is expected when cancelled; other errors are silent
     } finally {
-      setLoading(false);
+      if (!abort.signal.aborted) setLoading(false);
     }
   }, []);
 
@@ -808,7 +821,7 @@ function CalendarPageInner() {
         </div>
 
         <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-          {view === 'year' && (
+          {viewReady && view === 'year' && (
             <YearGrid
               year={viewDate.getFullYear()}
               events={expandedEvents}
@@ -817,14 +830,14 @@ function CalendarPageInner() {
               onPrevYear={goPrev}
             />
           )}
-          {view === 'month' && (
+          {viewReady && view === 'month' && (
             <MonthGrid
               viewDate={viewDate}
               events={expandedEvents}
               onDateClick={handleDayClick}
             />
           )}
-          {view === 'week' && (
+          {viewReady && view === 'week' && (
             <WeekView
               startDate={getWeekStart(viewDate)}
               events={expandedEvents}
@@ -834,7 +847,7 @@ function CalendarPageInner() {
               onEventClick={openEditEditor}
             />
           )}
-          {view === 'day' && (
+          {viewReady && view === 'day' && (
             <DayView
               date={viewDate}
               events={expandedEvents}
