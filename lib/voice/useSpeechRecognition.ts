@@ -60,6 +60,7 @@ export function useSpeechRecognition(
 
   const wsRef = useRef<WebSocket | null>(null);
   const captureRef = useRef<MicCapture | null>(null);
+  const wssAvailableRef = useRef(false);
   const segmentsRef = useRef<Map<number, string>>(new Map());
   const isFirstFrameRef = useRef(true);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -67,11 +68,9 @@ export function useSpeechRecognition(
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const useFallbackRef = useRef(false);
 
-  const wssAvailable =
-    typeof window !== 'undefined' &&
-    !!(window.SpeechRecognition ?? window.webkitSpeechRecognition);
-
   useEffect(() => {
+    wssAvailableRef.current =
+      !!(window.SpeechRecognition ?? window.webkitSpeechRecognition);
     return () => {
       if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
       wsRef.current?.close();
@@ -120,6 +119,8 @@ export function useSpeechRecognition(
       })
       .then(({ url, appId }) => {
         wsRef.current?.close();
+        captureRef.current?.stop();
+        captureRef.current = null;
         const ws = new WebSocket(url);
         wsRef.current = ws;
 
@@ -187,6 +188,7 @@ export function useSpeechRecognition(
               return;
             }
             if (frame.data?.result) {
+              if (!frame.data?.result?.ws) return;
               const full = applyResult(frame.data.result);
               setInterimText(full);
               if (frame.data.status === 2) {
@@ -223,7 +225,7 @@ export function useSpeechRecognition(
         retryTimerRef.current = null;
         startXunfei(currentLang);
       }, 500);
-    } else if (wssAvailable) {
+    } else if (wssAvailableRef.current) {
       useFallbackRef.current = true;
       setConnectionState('idle');
       setError(null);
