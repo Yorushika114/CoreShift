@@ -1,7 +1,7 @@
 // components/calendar/WeekView.tsx
 'use client';
 
-import { useRef, useEffect, useMemo, useState } from 'react';
+import { useRef, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { isToday, toISODateString, formatTimeSlot, getDateStringInTimezone } from '@/lib/calendar/date-utils';
 import { getHoursInTimezone } from '@/lib/calendar/date-utils';
 import { colorFor } from '@/lib/calendar/color-utils';
@@ -99,7 +99,7 @@ export function WeekView({
     [events],
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!scrollRef.current) return;
     let target: Date | null = focusTime ?? null;
     if (!target) {

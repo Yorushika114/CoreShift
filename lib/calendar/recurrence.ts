@@ -42,9 +42,17 @@ export function expandEvents(
     exMap.get(ex.eventId)!.set(ex.date, ex);
   }
 
+  const rangeStartMs = rangeStart.getTime();
+  const rangeEndMs = rangeEnd.getTime();
+
   for (const event of events) {
     if (!event.recurrence) {
-      result.push(event);
+      // Only include if the event overlaps with the requested range
+      const evStart = new Date(event.startAt).getTime();
+      const evEnd = event.endAt ? new Date(event.endAt).getTime() : evStart;
+      if (evStart <= rangeEndMs && evEnd >= rangeStartMs) {
+        result.push(event);
+      }
       continue;
     }
 
