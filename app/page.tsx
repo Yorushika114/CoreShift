@@ -20,6 +20,7 @@ import { WEEK_HEADERS_FULL } from '@/lib/i18n';
 import { reminderService } from '@/lib/reminder/reminderService';
 import { formatMonthYear, formatDayTitle, getWeekStart } from '@/lib/calendar/date-utils';
 import { expandEvents, realEventId } from '@/lib/calendar/recurrence';
+import { useSpeechRecognition } from '@/lib/voice/useSpeechRecognition';
 import type { CalendarEvent } from '@/types';
 
 type ViewMode = 'year' | 'month' | 'week' | 'day';
@@ -64,6 +65,12 @@ function CalendarPageInner() {
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const undoStackRef = useRef<UndoAction[]>([]);
   const [undoToast, setUndoToast] = useState<string | null>(null);
+  const [voiceDirectProcess, setVoiceDirectProcess] = useState(false);
+  const [isSpaceListening, setIsSpaceListening] = useState(false);
+  const isSpaceListeningRef = useRef(false);
+  const voiceOpenRef = useRef(false);
+  const spaceHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const spaceRecognizedRef = useRef('');
 
   useEffect(() => {
     fetch('/api/auth/status').then(r => r.json()).then(d => {
@@ -410,6 +417,56 @@ function CalendarPageInner() {
 
   const prevLabel = view === 'year' ? t('prevYear') : view === 'month' ? t('prevMonth') : view === 'week' ? t('prevWeek') : t('prevDay');
   const nextLabel = view === 'year' ? t('nextYear') : view === 'month' ? t('nextMonth') : view === 'week' ? t('nextWeek') : t('nextDay');
+
+  const { start: spaceStart, stop: spaceStop } = useSpeechRecognition({
+    lang: language === 'en' ? 'en-US' : 'zh-CN',
+    onResult: (text) => { if (text) spaceRecognizedRef.current = text; },
+  });
+  const spaceStartRef = useRef(spaceStart);
+  const spaceStopRef = useRef(spaceStop);
+  useEffect(() => { spaceStartRef.current = spaceStart; }, [spaceStart]);
+  useEffect(() => { spaceStopRef.current = spaceStop; }, [spaceStop]);
+  useEffect(() => { voiceOpenRef.current = voiceOpen; }, [voiceOpen]);
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === ' ' && !e.repeat && !voiceOpenRef.current && !isSpaceListeningRef.current) {
+        e.preventDefault();
+        spaceHoldTimerRef.current = setTimeout(() => {
+          isSpaceListeningRef.current = true;
+          setIsSpaceListening(true);
+          spaceRecognizedRef.current = '';
+          spaceStartRef.current();
+        }, 500);
+      }
+    }
+    function onKeyUp(e: KeyboardEvent) {
+      if (e.key !== ' ') return;
+      if (spaceHoldTimerRef.current) {
+        clearTimeout(spaceHoldTimerRef.current);
+        spaceHoldTimerRef.current = null;
+      }
+      if (isSpaceListeningRef.current) {
+        spaceStopRef.current();
+        isSpaceListeningRef.current = false;
+        setIsSpaceListening(false);
+        const text = spaceRecognizedRef.current;
+        if (text) {
+          setVoiceDraft(text);
+          setVoiceDirectProcess(true);
+          setVoiceOpen(true);
+        }
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
+  }, []);
+
   function openVoiceWithDraft(command?: string) {
     setVoiceDraft(command);
     setVoiceOpen(true);
@@ -457,6 +514,13 @@ function CalendarPageInner() {
         <div className="flex-1" />
 
         <div className="px-4 pb-4 pt-2 flex flex-col gap-3">
+          <button
+            onClick={() => openVoiceWithDraft()}
+            className="flex items-center gap-2 w-full bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white rounded-xl px-4 py-2.5 shadow-sm shadow-indigo-200 transition-all text-sm font-medium"
+          >
+            <span className="text-base">🎙</span>
+            <span>{t('voiceInputFab')}</span>
+          </button>
           <SettingsPanel
             googleConnected={googleConnected}
             syncing={syncing}
@@ -474,7 +538,7 @@ function CalendarPageInner() {
 
       {/* Main Area */}
       <main
-        className="flex-1 flex flex-col overflow-hidden pb-16 md:pb-20"
+        className="flex-1 flex flex-col overflow-hidden pb-16 md:pb-4"
         style={
           bgType !== 'none' && bgValue
             ? { backgroundImage: `url(${bgValue})`, backgroundSize: 'cover', backgroundPosition: 'center' }
@@ -619,22 +683,20 @@ function CalendarPageInner() {
           onQuery={handleVoiceQuery}
           onChanged={handleVoiceChanged}
           initialText={voiceDraft}
+          directProcess={voiceDirectProcess}
           onClose={() => {
             setVoiceOpen(false);
             setVoiceDraft(undefined);
+            setVoiceDirectProcess(false);
           }}
         />
       )}
 
-      {/* Voice FAB - 语音优先核心入口，桌面端居中悬浮（移动端用 Action Bar） */}
-      <button
-        onClick={() => openVoiceWithDraft()}
-        className="hidden md:flex fixed bottom-6 left-1/2 -translate-x-1/2 z-[90] items-center gap-2 bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white rounded-full px-5 py-3.5 shadow-lg shadow-indigo-200 transition-all"
-        aria-label={t('voiceInput')}
-      >
-        <span className="text-xl">🎙</span>
-        <span className="text-sm font-medium">{t('voiceInputFab')}</span>
-      </button>
+      {isSpaceListening && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[110] bg-indigo-600 text-white text-xs px-4 py-2 rounded-full shadow-lg animate-pulse pointer-events-none">
+          🎙 {language === 'zh' ? '正在聆听…松开 Space 完成' : 'Listening… release Space to finish'}
+        </div>
+      )}
 
       {/* 移动端底部 Action Bar（md 以上隐藏，FAB 替代） */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-[90] bg-white/95 backdrop-blur-sm border-t border-gray-200 flex items-center justify-around px-4 py-2">
